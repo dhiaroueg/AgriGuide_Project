@@ -20,6 +20,7 @@ from app.market_intelligence.price_trends import (
 )
 from app.market_intelligence.historical_yields import get_historical_yield
 from app.market_intelligence.reference_baselines import get_baseline
+from app.market_intelligence.market_quotes import get_latest_quote, quotes_status
 
 _TENDANCE_LABEL = {
     "hausse": 0.5,
@@ -89,6 +90,7 @@ def market_pipeline_status() -> dict:
         "chroma_ready": chroma_ok,  # compat alias
         "mistral_configured": bool(os.environ.get("MISTRAL_API_KEY")),
         "rag_active": _rag_enabled(),
+        "market_quotes": quotes_status(),
     }
 
 
@@ -100,11 +102,21 @@ def get_market_price(culture: str) -> dict:
     """
     key = normalize_culture_key(culture)
     baseline = get_baseline(key)
+    quote = get_latest_quote(key)
     historical_yield = get_historical_yield(key)
     trend = compute_price_trend(key)
 
     tendance = 0.0
     source_parts = ["barème de référence (prix absolu)"]
+    price_is_fallback = True
+    price_date = None
+    if quote:
+        baseline["prix_moyen_eur_par_kg"] = quote["price_eur_kg"]
+        price_is_fallback = False
+        price_date = quote["date"]
+        source_parts = [f"{quote['source']} ({quote['market']}, {quote['region']}, {quote['stade']}, {quote['date']})"]
+        if not quote["fresh"]:
+            source_parts.append(f"cotation ancienne ({quote['age_days']} jours)")
     yield_kg_ha = baseline["rendement_moyen_kg_par_ha"]
     yield_std_kg_ha = None
     yield_is_fallback = True
@@ -175,6 +187,8 @@ def get_market_price(culture: str) -> dict:
 
     return {
         "prix_moyen_eur_par_kg": baseline["prix_moyen_eur_par_kg"],
+        "prix_fallback": price_is_fallback,
+        "prix_date": price_date,
         "rendement_moyen_kg_par_ha": yield_kg_ha,
         "rendement_std_kg_par_ha": yield_std_kg_ha,
         "rendement_fallback": yield_is_fallback,

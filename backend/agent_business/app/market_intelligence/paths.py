@@ -6,7 +6,20 @@ import os
 from pathlib import Path
 
 # backend/agent_business/app/market_intelligence/paths.py → repo root = parents[4]
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+def _repo_root_or_workdir() -> Path:
+    """Find the repository root without assuming a fixed parent depth.
+
+    In Docker this module lives below /app, where parents[4] does not exist.
+    Mounted MARKET_DATA_DIR values remain the primary source of market data.
+    """
+    module_path = Path(__file__).resolve()
+    for parent in module_path.parents:
+        if (parent / "data").is_dir() and (parent / "backend").is_dir():
+            return parent
+    return Path.cwd()
+
+
+_REPO_ROOT = _repo_root_or_workdir()
 _DEFAULT_DATA = _REPO_ROOT / "data"
 
 

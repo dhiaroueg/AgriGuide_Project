@@ -26,6 +26,13 @@ import {
   Info,
   Quote,
   Store,
+  Leaf,
+  ArrowRight,
+  Calculator,
+  CircleAlert,
+  Database,
+  ShieldCheck,
+  WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -41,11 +48,13 @@ import {
 import {
   getLatestAnalyzedTerrainId,
   loadRealCropRecommendations,
+  loadLatestCropRecommendations,
   cultureLabel,
 } from "@/lib/cropRecommendations";
 import { saveFarmerDecision } from "@/lib/farmerDecision";
 import { useAuth } from "@/lib/auth-context";
 import { MarketplaceWasteSuggestions } from "@/components/CropWasteValorization";
+import { PageTour } from "@/components/onboarding/PageTour";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
@@ -99,8 +108,10 @@ function parseBudgetInput(raw: string): number | null {
   return Math.round(value);
 }
 
+const AGRI_ERROR_KEY = "NEED_AGRI_ANALYSIS";
+
 function Page() {
-  const [budgetText, setBudgetText] = useState("25000");
+  const [budgetText, setBudgetText] = useState("");
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [report, setReport] = useState<BusinessAdvisorResponse | null>(null);
 
@@ -145,11 +156,14 @@ function Page() {
   const terrainIdsKey = selectedTerrainIds.slice().sort().join(",");
 
   const cropRecommendations = useMemo(() => {
+    // 1. Cherche une analyse pour chaque terrain sélectionné
     for (const id of selectedTerrainIds) {
       const recs = loadRealCropRecommendations(id);
       if (recs && recs.length > 0) return recs;
     }
-    return loadRealCropRecommendations(terrainId) ?? [];
+    // 2. Fallback : charge la toute dernière analyse disponible (utile si
+    //    terrain_id ne correspond pas exactement ou en mode SKIP_AUTH).
+    return loadLatestCropRecommendations() ?? [];
   }, [selectedTerrainIds, terrainId]);
 
   function toggleTerrain(id: string) {
@@ -213,9 +227,7 @@ function Page() {
       return;
     }
     if (cropRecommendations.length === 0) {
-      setBudgetError(
-        "Analysez d'abord un des terrains sélectionnés dans le Conseiller Agriculture pour obtenir de vraies recommandations.",
-      );
+      setBudgetError(AGRI_ERROR_KEY);
       return;
     }
     const budget = parseBudgetInput(budgetText);
@@ -324,16 +336,32 @@ function Page() {
         icon={LineChart}
         tone="earth"
         title="Conseiller Financier"
-        subtitle="Simulez vos revenus selon votre budget."
-        className="mb-8"
+        subtitle="Comparez des scénarios adaptés à votre parcelle avant d’engager votre budget."
+        className="mb-7"
       />
 
-      <div className="grid gap-5 md:grid-cols-5">
-        <Reveal from="up" delay={80} className="card-soft p-6 md:p-8 md:col-span-3">
-          <div className="text-sm text-muted-foreground">Votre budget de départ</div>
-          <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-start">
+      <Reveal from="up" className="border-y border-border/70 py-5" data-tour="biz-budget">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(19rem,0.9fr)] lg:items-end">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <WalletCards className="h-4 w-4" />
+              </span>
+              Préparer votre étude
+            </div>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Indiquez l’enveloppe disponible pour la campagne. AgriMent comparera les cultures
+              issues de votre analyse de parcelle, puis détaillera les hypothèses derrière chaque chiffre.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="budget-input" className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Budget de départ
+            </label>
+            <div className="mt-2 flex gap-2">
             <div className="relative flex-1">
               <Input
+                id="budget-input"
                 type="text"
                 inputMode="decimal"
                 value={budgetText}
@@ -347,45 +375,69 @@ function Page() {
                     generateReport();
                   }
                 }}
-                placeholder="Ex. : 25000"
+                placeholder="Ex. : 25 000"
                 aria-label="Budget en euros"
                 className="h-12 rounded-xl pr-10 text-base font-display font-semibold"
               />
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 €
               </span>
-              {budgetError && <p className="mt-1.5 text-xs text-destructive">{budgetError}</p>}
+              {budgetError && budgetError !== AGRI_ERROR_KEY && (
+                <p className="mt-1.5 text-xs text-destructive">{budgetError}</p>
+              )}
+              {budgetError === AGRI_ERROR_KEY && (
+                <div className="mt-2 flex items-start gap-3 border-l-2 border-harvest bg-harvest/10 px-3 py-2.5 text-sm">
+                  <Leaf className="h-4 w-4 mt-0.5 shrink-0 text-harvest" />
+                  <span className="flex-1 text-harvest-foreground">
+                    Analysez d'abord ce terrain dans le{" "}
+                    <strong>Conseiller Agriculture</strong> pour obtenir de vraies recommandations.
+                  </span>
+                  <Button asChild size="sm" className="shrink-0 rounded-lg h-8 gap-1.5">
+                    <Link to="/agriculture">
+                      Analyser
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </div>
             <Button
               type="button"
-              className="h-12 rounded-xl shrink-0"
+              className="h-12 shrink-0 rounded-xl"
               disabled={scenariosMutation.isPending}
               onClick={generateReport}
+              data-tour="biz-generate"
             >
               {scenariosMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <LineChart className="h-4 w-4 mr-2" />
               )}
-              Générer le rapport et les scénarios
+              Comparer les scénarios
             </Button>
+            </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Saisissez votre budget, puis lancez l’étude financière et les trois scénarios de
-            cultures.
-          </p>
-        </Reveal>
+        </div>
+      </Reveal>
 
-        <Reveal from="up" delay={160} className="card-soft p-6 md:col-span-2 bg-gradient-sky text-sky-foreground">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <MapPin className="h-4 w-4" /> Vos terrains
+      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.72fr)]">
+        <Reveal from="up" delay={80} className="border border-border/80 bg-card p-5 md:p-6">
+          <div data-tour="biz-terrains">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Parcelles retenues</p>
+              <h2 className="mt-1 font-display text-xl font-bold tracking-tight">Votre périmètre de campagne</h2>
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+              <Ruler className="h-4 w-4" /> {ha.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha
+            </span>
           </div>
           {terrains.length > 0 ? (
             <>
-              <p className="mt-2 text-xs text-sky-foreground/80">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Sélectionnez une ou plusieurs parcelles
               </p>
-              <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {terrains.map((t) => {
                   const checked = selectedTerrainIds.includes(t.id);
                   const isPrimary = t.id === terrainId;
@@ -393,21 +445,21 @@ function Page() {
                     <label
                       key={t.id}
                       className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
-                        checked ? "bg-card/35 ring-1 ring-sky-foreground/25" : "bg-card/15 hover:bg-card/25",
+                        "flex cursor-pointer items-center gap-3 border px-3 py-3 text-sm transition",
+                        checked ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:border-primary/25",
                       )}
                     >
                       <Checkbox
                         checked={checked}
                         onCheckedChange={() => toggleTerrain(t.id)}
-                        className="border-sky-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                        className="border-primary/40 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">
                           {t.nom ?? "Terrain"}
                           {isPrimary ? " · analyse Agri" : ""}
                         </span>
-                        <span className="text-xs text-sky-foreground/75">
+                        <span className="text-xs text-muted-foreground">
                           {t.superficie_ha.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha
                         </span>
                       </span>
@@ -415,38 +467,63 @@ function Page() {
                   );
                 })}
               </div>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="font-display text-4xl font-semibold">
-                  {ha.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-sky-foreground/80 inline-flex items-center gap-1 text-sm">
-                  <Ruler className="h-4 w-4" /> ha · {selectedTerrains.length} parcelle
+              <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 text-primary" /> {selectedTerrains.length} parcelle
                   {selectedTerrains.length > 1 ? "s" : ""}
-                </span>
               </div>
               {cropRecommendations.length > 0 ? (
-                <p className="mt-3 text-xs text-sky-foreground/85">
-                  Analyse Agriculture disponible
+                <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Analyse Agriculture disponible
                   ({cropRecommendations.length} culture
                   {cropRecommendations.length > 1 ? "s" : ""}).
                 </p>
               ) : (
-                <p className="mt-3 text-xs text-sky-foreground/85">
-                  Aucune analyse Agriculture pour les terrains sélectionnés — analysez-en un
-                  d’abord dans le Conseiller Agriculture.
-                </p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Aucune analyse Agriculture pour les terrains sélectionnés.
+                  </p>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="secondary"
+                    className="w-full rounded-xl h-9 gap-2"
+                  >
+                    <Link to="/agriculture">
+                      <Leaf className="h-3.5 w-3.5" />
+                      Analyser dans le Conseiller Agriculture
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
               )}
             </>
           ) : (
-            <p className="mt-3 text-sm text-sky-foreground/90">
+            <p className="mt-3 text-sm text-muted-foreground">
               Aucun terrain déclaré ({FALLBACK_SUPERFICIE_HA} ha utilisés par défaut). Ajoutez vos
               parcelles depuis votre profil pour un calcul basé sur votre superficie réelle.
             </p>
           )}
+          </div>
+        </Reveal>
+
+        <Reveal from="up" delay={150} className="border border-amber-200 bg-amber-50/70 p-5 text-amber-950">
+          <div className="flex items-start gap-3">
+            <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div>
+              <p className="font-display text-lg font-bold tracking-tight">Ce que le rapport peut décider</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-amber-900/80">
+                Les scénarios sont des estimations pour comparer des options, pas un devis ni une garantie de revenu.
+              </p>
+              <div className="mt-4 space-y-2 text-xs leading-relaxed text-amber-900/75">
+                <p className="flex gap-2"><Database className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Tendances IPPAP et rendements historiques lorsqu’ils sont disponibles.</p>
+                <p className="flex gap-2"><Calculator className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Prix absolus et certains coûts peuvent provenir de barèmes de référence.</p>
+              </div>
+            </div>
+          </div>
         </Reveal>
       </div>
-      <Reveal as="h2" className="font-display text-2xl font-semibold mt-10 mb-4">
-        Rapport financier et scénarios
+      <Reveal as="h2" className="font-display text-2xl font-semibold mt-10 mb-2">
+        Comparaison des scénarios
       </Reveal>
 
       {scenariosMutation.isError && (
@@ -468,10 +545,11 @@ function Page() {
       )}
 
       {!report && !scenariosMutation.isPending && !scenariosMutation.isError && (
-        <p className="text-sm text-muted-foreground">
-          Aucun rapport pour l’instant. Indiquez votre budget puis cliquez sur « Générer le rapport
-          et les scénarios ».
-        </p>
+        <div className="mt-5 grid gap-4 border-t border-border pt-6 md:grid-cols-3">
+          <EmptyStep icon={WalletCards} number="1" title="Budget" body="Indiquez l’enveloppe réellement disponible pour la campagne." />
+          <EmptyStep icon={MapPin} number="2" title="Parcelles" body="Choisissez les surfaces que vous souhaitez comparer." />
+          <EmptyStep icon={LineChart} number="3" title="Scénarios" body="Comparez bénéfice estimé, risque et qualité des données." />
+        </div>
       )}
 
       {scenariosMutation.isPending && (
@@ -490,16 +568,16 @@ function Page() {
 
       {report && !scenariosMutation.isPending && (
         <>
-          <div className="card-soft p-5 mb-5">
-            <div className="text-sm font-medium">Synthèse du rapport financier</div>
+          <div className="border-y border-border/70 py-5 mb-5">
+            <div className="text-sm font-medium">Synthèse de comparaison</div>
             <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
-              <div className="rounded-xl bg-secondary/60 p-3">
+              <div className="border-l-2 border-primary/60 pl-3">
                 <div className="text-xs text-muted-foreground">Budget analysé</div>
                 <div className="font-display text-xl font-semibold">
                   {report.budget_input.toLocaleString("fr-FR")} €
                 </div>
               </div>
-              <div className="rounded-xl bg-secondary/60 p-3">
+              <div className="border-l-2 border-signal/70 pl-3">
                 <div className="text-xs text-muted-foreground">Meilleur profit estimé</div>
                 <div className="font-display text-xl font-semibold text-primary">
                   {Math.max(...report.scenarios.map((s) => s.profit_estime)).toLocaleString(
@@ -508,7 +586,7 @@ function Page() {
                   €
                 </div>
               </div>
-              <div className="rounded-xl bg-secondary/60 p-3">
+              <div className="border-l-2 border-border pl-3">
                 <div className="text-xs text-muted-foreground">Culture recommandée</div>
                 <div className="font-display text-xl font-semibold">
                   {cultureLabel(report.scenarios[0]?.culture ?? "-")}
@@ -525,7 +603,7 @@ function Page() {
               decisionMutation.isPending &&
               decisionMutation.variables?.allocations[0]?.culture === s.culture;
             return (
-              <Reveal key={s.culture} from="up" delay={i * 120} className="card-soft p-6 flex flex-col">
+              <Reveal key={s.culture} from="up" delay={i * 120} className="border border-border bg-card p-5 flex flex-col">
                 <div className="flex items-center justify-between">
                   <div className="font-display text-xl font-semibold">
                     {cultureLabel(s.culture)}
@@ -580,6 +658,11 @@ function Page() {
 
                 <div className="mt-3 text-xs text-muted-foreground">
                   <span className="font-medium">Solution au risque :</span> {s.solution_risque}
+                </div>
+
+                <div className="mt-4 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">Fiabilité {Math.round(s.confiance_donnees.score * 100)} %</span>
+                  <span className="block mt-1">{s.confiance_donnees.raisons[0]}</span>
                 </div>
 
                 <div className="mt-auto pt-6 space-y-2">
@@ -661,6 +744,7 @@ function Page() {
           )}
         </DialogContent>
       </Dialog>
+      <PageTour tourId="business" />
     </AppShell>
   );
 }
@@ -672,6 +756,31 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
       <span className={accent ? "font-display text-lg font-semibold text-primary" : "font-medium"}>
         {value}
       </span>
+    </div>
+  );
+}
+
+function EmptyStep({
+  icon: Icon,
+  number,
+  title,
+  body,
+}: {
+  icon: typeof LineChart;
+  number: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex gap-3 border-l-2 border-border pl-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <p className="font-mono text-[10px] font-semibold tracking-[0.16em] text-muted-foreground">{number}</p>
+        <h3 className="mt-0.5 text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{body}</p>
+      </div>
     </div>
   );
 }

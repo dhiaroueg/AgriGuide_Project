@@ -8,6 +8,9 @@ import { Sparkles, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { cultureLabel } from "@/lib/cropRecommendations";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/lib/auth-context";
+import { createListing } from "@/lib/marketplaceApi";
 
 type NouveauSearch = {
   kind?: "recolte" | "dechet";
@@ -51,6 +54,11 @@ function NewListing() {
   const [desc, setDesc] = useState(search.description ?? "");
   const [utility, setUtility] = useState(search.utility ?? "");
   const [aiFilled, setAiFilled] = useState(Boolean(search.utility || search.description));
+  const { token, user } = useAuth();
+  const [deliveryModes, setDeliveryModes] = useState<string[]>(["retrait_sur_place"]);
+  const [deliveryRadius, setDeliveryRadius] = useState("0");
+  const [certifications, setCertifications] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Prefill when arriving from agriculture / business waste CTAs
   useEffect(() => {
@@ -94,10 +102,27 @@ function NewListing() {
     toast.success("Suggestions ajoutées - ajustez à votre convenance.");
   };
 
-  const submit = (e: React.FormEvent) => {
+  const toggleDelivery = (mode: string) => setDeliveryModes((current) =>
+    current.includes(mode) ? current.filter((value) => value !== mode) : [...current, mode],
+  );
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Annonce publiée !");
-    nav({ to: "/marketplace/mes-annonces" });
+    const parsedQuantity = Number.parseFloat(quantity.replace(",", "."));
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return toast.error("Indiquez une quantité numérique valide.");
+    if (!token || !user) return toast.error("Connectez-vous pour publier une annonce.");
+    if (deliveryModes.length === 0) return toast.error("Choisissez au moins un mode de remise.");
+    setIsPublishing(true);
+    try {
+      await createListing({ type_annonce: kind, titre: crop, description: desc, quantite: parsedQuantity, unite: "tonne",
+        prix: Number.parseFloat(price.replace(",", ".")) || null, culture_source: crop, terrain_id: user.terrains[0]?.id,
+        region: user.terrains[0]?.region ?? undefined, modes_livraison: deliveryModes,
+        rayon_livraison_km: Number.parseFloat(deliveryRadius) || 0,
+        certifications: certifications.split(",").map((value) => value.trim()).filter(Boolean) }, token);
+      toast.success("Annonce publiée : elle est maintenant visible sur le marketplace.");
+      nav({ to: "/marketplace/mes-annonces" });
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Publication impossible."); }
+    finally { setIsPublishing(false); }
   };
 
   return (
@@ -198,14 +223,33 @@ function NewListing() {
             />
           </div>
         )}
+        <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-4 space-y-4">
+          <div>
+            <Label className="text-sm font-semibold">Remise et livraison</Label>
+            <p className="text-xs text-muted-foreground mt-1">L’adresse exacte reste privée jusqu’à votre accord dans la messagerie.</p>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {[["retrait_sur_place", "Retrait sur place"], ["livraison", "Livraison"], ["point_relais", "Point relais"]].map(([value, label]) => (
+              <label key={value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={deliveryModes.includes(value)} onCheckedChange={() => toggleDelivery(value)} />{label}
+              </label>
+            ))}
+          </div>
+          {deliveryModes.includes("livraison") && <div className="max-w-xs"><Label htmlFor="radius">Rayon de livraison (km)</Label><Input id="radius" type="number" min="0" max="500" value={deliveryRadius} onChange={(e) => setDeliveryRadius(e.target.value)} className="mt-2 h-11 rounded-xl" /></div>}
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="certifications">Certifications (facultatif)</Label>
+          <Input id="certifications" value={certifications} onChange={(e) => setCertifications(e.target.value)} placeholder="Ex. Agriculture biologique (AB), HVE niveau 3" className="mt-2 h-12 rounded-xl" />
+          <p className="mt-1 text-xs text-muted-foreground">Séparez les certifications par une virgule. Elles doivent pouvoir être justifiées si nécessaire.</p>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
         <Button type="button" variant="outline" onClick={() => nav({ to: "/marketplace" })} className="rounded-xl h-12">
           Annuler
         </Button>
-        <Button type="submit" className="rounded-xl h-12 px-8">
-          Publier l&apos;annonce
+        <Button type="submit" className="rounded-xl h-12 px-8" disabled={isPublishing}>
+          {isPublishing ? "Publication..." : "Publier l'annonce"}
         </Button>
       </div>
     </form>

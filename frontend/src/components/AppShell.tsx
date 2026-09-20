@@ -9,6 +9,10 @@ import {
   LogOut,
   User,
   Loader2,
+  CloudSun,
+  TrendingUp,
+  Camera,
+  Users,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -16,6 +20,7 @@ import { useAuth, roleLabel } from "@/lib/auth-context";
 import type { Role } from "@/lib/authApi";
 import { AgriLogo } from "@/components/AgriLogo";
 import { ScrollMoreHint } from "@/components/motion/ScrollMoreHint";
+import { APP_LANGUAGES, useAppLanguage } from "@/lib/languageContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,21 +31,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const LANGUAGES = [
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "it", label: "Italiano", flag: "🇮🇹" },
-] as const;
-
 const nav = [
   { to: "/dashboard", label: "Accueil", shortLabel: "Accueil", icon: Home, roles: ["farmer"] as Role[] },
-  { to: "/agriculture", label: "Conseiller Agricole", shortLabel: "Agricole", icon: Sprout, roles: ["farmer"] as Role[] },
   { to: "/regulation", label: "Conseiller Réglementaire", shortLabel: "Règles", icon: ScrollText, roles: ["farmer"] as Role[] },
+  { to: "/agriculture", label: "Conseiller Agricole", shortLabel: "Agricole", icon: Sprout, roles: ["farmer"] as Role[] },
   { to: "/business", label: "Conseiller Financier", shortLabel: "Financier", icon: LineChart, roles: ["farmer"] as Role[] },
+  { to: "/trading", label: "Bourse & Vente à Terme", shortLabel: "Trading", icon: TrendingUp, roles: ["farmer"] as Role[] },
   { to: "/aujourd-hui", label: "Aujourd'hui", shortLabel: "Aujourd'hui", icon: CalendarDays, roles: ["farmer"] as Role[] },
+  { to: "/weather", label: "Météo · Dashboard", shortLabel: "Météo", icon: CloudSun, roles: ["farmer"] as Role[] },
   { to: "/marketplace", label: "Marché", shortLabel: "Marché", icon: Store, roles: ["farmer", "acheteur"] as Role[] },
+  { to: "/diagnostic", label: "Diagnostic & Scanner IA", shortLabel: "Scanner", icon: Camera, roles: ["farmer", "acheteur"] as Role[] },
+  { to: "/organizations", label: "Organisations & Contacts", shortLabel: "Contacts", icon: Users, roles: ["farmer", "acheteur"] as Role[] },
 ] as const;
 
 function FullPageLoader() {
@@ -259,8 +260,8 @@ export function AppShell({
 }
 
 function LanguageSwitcher({ expanded }: { expanded: boolean }) {
-  const [lang, setLang] = useState<(typeof LANGUAGES)[number]["code"]>("fr");
-  const current = LANGUAGES.find((l) => l.code === lang) ?? LANGUAGES[0];
+  const { language, setLanguage } = useAppLanguage();
+  const current = APP_LANGUAGES.find((l) => l.code === language) ?? APP_LANGUAGES[0];
 
   return (
     <DropdownMenu>
@@ -277,11 +278,11 @@ function LanguageSwitcher({ expanded }: { expanded: boolean }) {
       <DropdownMenuContent align="start" side="right" className="w-44">
         <DropdownMenuLabel>Langue</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {LANGUAGES.map((l) => (
+        {APP_LANGUAGES.map((l) => (
           <DropdownMenuItem
             key={l.code}
-            onClick={() => setLang(l.code)}
-            className={cn("gap-2", l.code === lang && "font-semibold")}
+            onClick={() => setLanguage(l.code)}
+            className={cn("gap-2", l.code === language && "font-semibold")}
           >
             <span className="text-base leading-none">{l.flag}</span> {l.label}
           </DropdownMenuItem>

@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
+import { PageTour } from "@/components/onboarding/PageTour";
 import { AlertBanner } from "@/components/AlertBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { Reveal } from "@/components/motion/Reveal";
@@ -10,6 +11,7 @@ import { useCountUp } from "@/components/motion/useCountUp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   ChartContainer,
   ChartLegend,
@@ -57,18 +59,26 @@ import {
   Wallet,
   Wind,
   Recycle,
+  Sparkles,
+  TrendingUp,
+  ShieldAlert,
+  ArrowRight,
+  Sun,
+  MapPin,
+  CheckCircle,
+  Zap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/aujourd-hui")({
   head: () => ({
     meta: [
-      { title: "Aujourd'hui - AgriMent" },
+      { title: "Aujourd'hui - AgriMent Command Center" },
       {
         name: "description",
         content:
-          "Briefing du jour : allocation des cultures, météo, irrigation, alertes et tâches.",
+          "Briefing quotidien de l'agriculteur : météo, budget, allocation des parcelles, alertes et plan d'action.",
       },
-      { property: "og:title", content: "Aujourd'hui - AgriMent" },
+      { property: "og:title", content: "Aujourd'hui - AgriMent Command Center" },
       {
         property: "og:description",
         content: "Votre journée de terrain en un coup d'œil.",
@@ -148,87 +158,63 @@ function campaignMonthKeys(decision: FarmerDecisionResponse): string[] {
     const now = new Date();
     start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   }
-  const maturityTimes = decision.allocations
-    .map((a) => (a.date_maturite_prevue ? new Date(a.date_maturite_prevue).getTime() : NaN))
-    .filter((t) => Number.isFinite(t));
-  const end = maturityTimes.length
-    ? new Date(Math.max(...maturityTimes))
-    : new Date(start.getFullYear(), start.getMonth() + 4, 1);
-  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-  const last = new Date(end.getFullYear(), end.getMonth(), 1);
   const keys: string[] = [];
-  while (cursor <= last && keys.length < 8) {
-    keys.push(
-      `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`,
-    );
-    cursor.setMonth(cursor.getMonth() + 1);
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  for (let i = 0; i < 6; i++) {
+    keys.push(monthKey(cur.toISOString().slice(0, 10)));
+    cur.setMonth(cur.getMonth() + 1);
   }
-  return keys.length ? keys : [monthKey(todayIso())];
+  return keys;
 }
 
 const costChartConfig = {
-  prevu: { label: "prévu", color: "var(--chart-2)" },
-  reel: { label: "réel", color: "var(--chart-1)" },
+  prevu: { label: "Prévu", color: "hsl(var(--primary))" },
+  reel: { label: "Réel", color: "hsl(var(--harvest))" },
 } satisfies ChartConfig;
 
 function AllocationSummaryCard({
   totalHa,
   culturesCount,
+  terrainName,
 }: {
   totalHa: number;
   culturesCount: number;
+  terrainName?: string;
 }) {
-  const [haRef, haDisplayed] = useCountUp<HTMLParagraphElement>(totalHa, {
-    duration: 1400,
-    decimals: 1,
-  });
-  const [culturesRef, culturesDisplayed] = useCountUp<HTMLParagraphElement>(culturesCount, {
-    duration: 1400,
-    decimals: 0,
-  });
-
+  const [countRef, animatedHa] = useCountUp<HTMLSpanElement>(totalHa, { duration: 1000, decimals: 1 });
   return (
-    <Reveal delay={60} className="h-full">
-      <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-card p-5 shadow-[0_12px_40px_-24px_rgba(28,43,28,0.4)] ring-1 ring-border/80 md:p-6">
-        <h2 className="font-display text-xl font-semibold tracking-tight text-primary">
-          Suivi de campagne
-        </h2>
-        <div className="mt-5 flex flex-1 flex-col justify-center gap-5">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">Surface allouée</p>
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Sprout className="h-4 w-4" />
-                </span>
-              </div>
-              <p
-                ref={haRef}
-                className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary tabular-nums"
-              >
-                {haDisplayed.toFixed(1)} ha
-              </p>
+    <Reveal from="left" delay={60} className="h-full">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-6 shadow-sm ring-1 ring-emerald-500/20 flex flex-col justify-between">
+        <div className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl" />
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+              <Sprout className="h-5 w-5" />
+            </span>
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-500">
+              Campagne Active
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Surface Totale Allouée
+            </p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span ref={countRef} className="font-display text-4xl font-extrabold tracking-tight text-foreground">
+                {animatedHa.toFixed(1)}
+              </span>
+              <span className="text-sm font-semibold text-muted-foreground">ha</span>
             </div>
           </div>
-          <div className="h-px bg-border/70" />
-          <div className="flex items-start gap-3">
-            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">Cultures actives</p>
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <LineChart className="h-4 w-4" />
-                </span>
-              </div>
-              <p
-                ref={culturesRef}
-                className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary tabular-nums"
-              >
-                {Math.round(culturesDisplayed)}
-              </p>
-            </div>
-          </div>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+            {terrainName || "Terrain de démonstration"}
+          </span>
+          <span className="font-semibold text-foreground">{culturesCount} culture{culturesCount > 1 ? "s" : ""}</span>
         </div>
       </div>
     </Reveal>
@@ -243,7 +229,8 @@ function CostVsPlannedChart({
   spends: SpendEntry[];
 }) {
   const months = useMemo(() => campaignMonthKeys(decision), [decision]);
-  const plannedPerMonth = decision.cout_final / months.length;
+  const plannedPerMonth = (decision.cout_final ?? 0) / 6;
+
   const spentByMonth = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of spends) {
@@ -261,17 +248,22 @@ function CostVsPlannedChart({
 
   return (
     <Reveal delay={120} className="h-full">
-      <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-card p-5 shadow-[0_12px_40px_-24px_rgba(28,43,28,0.4)] ring-1 ring-border/80 md:p-6">
-        <div className="flex items-center gap-2.5">
-          <Wallet className="h-4 w-4 text-primary" />
-          <h2 className="font-display text-xl font-semibold tracking-tight text-primary">
-            Coût réel vs. prévu
-          </h2>
+      <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border/80 md:p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+              <Wallet className="h-4 w-4" />
+            </span>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+              Coût réel vs. prévu
+            </h2>
+          </div>
+          <span className="text-xs font-semibold text-muted-foreground">Suivi Budgétaire</span>
         </div>
 
-        <ChartContainer config={costChartConfig} className="mt-3 aspect-[5/3] w-full min-h-0 flex-1">
+        <ChartContainer config={costChartConfig} className="mt-4 aspect-[5/3] w-full min-h-0 flex-1">
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
-            <CartesianGrid vertical={false} strokeDasharray="4 4" />
+            <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="rgba(120, 120, 120, 0.15)" />
             <XAxis dataKey="mois" tickLine={false} axisLine={false} tickMargin={6} fontSize={11} />
             <YAxis
               tickLine={false}
@@ -295,8 +287,8 @@ function CostVsPlannedChart({
               }
             />
             <ChartLegend content={<ChartLegendContent className="pt-1" />} />
-            <Bar dataKey="prevu" fill="var(--color-prevu)" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="reel" fill="var(--color-reel)" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="prevu" fill="var(--color-prevu)" radius={[6, 6, 0, 0]} maxBarSize={20} />
+            <Bar dataKey="reel" fill="var(--color-reel)" radius={[6, 6, 0, 0]} maxBarSize={20} />
           </BarChart>
         </ChartContainer>
       </div>
@@ -330,7 +322,7 @@ function SpendInputCard({
       return;
     }
     setFormError(null);
-    onAddSpend({ amount, date: dateText, label: labelText });
+    onAddSpend({ amount, date: dateText, label: labelText || "Achat intrant / équipement" });
     setAmountText("");
     setLabelText("");
     setDateText(todayIso());
@@ -338,9 +330,16 @@ function SpendInputCard({
 
   return (
     <Reveal delay={180} className="mt-4">
-      <div className="overflow-hidden rounded-3xl bg-card p-4 shadow-[0_12px_40px_-24px_rgba(28,43,28,0.4)] ring-1 ring-border/80 md:p-5">
-        <p className="text-sm font-medium text-primary">Saisir une dépense réelle</p>
-        <form onSubmit={submitSpend} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1.2fr_auto_auto]">
+      <div className="overflow-hidden rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border/80">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Plus className="w-4 h-4 text-emerald-500" />
+            Saisir une dépense réelle
+          </p>
+          <span className="text-xs text-muted-foreground">Registre Financier</span>
+        </div>
+
+        <form onSubmit={submitSpend} className="grid gap-3 sm:grid-cols-[1fr_1.2fr_auto_auto]">
           <div className="relative">
             <Input
               type="text"
@@ -350,11 +349,11 @@ function SpendInputCard({
                 setAmountText(e.target.value);
                 setFormError(null);
               }}
-              placeholder="Montant"
+              placeholder="Montant (ex: 150)"
               aria-label="Montant dépensé"
-              className="h-10 rounded-xl pr-8"
+              className="h-10 rounded-xl pr-8 bg-background"
             />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-semibold">
               €
             </span>
           </div>
@@ -362,43 +361,43 @@ function SpendInputCard({
             type="text"
             value={labelText}
             onChange={(e) => setLabelText(e.target.value)}
-            placeholder="Libellé (engrais, irrigation…)"
+            placeholder="Libellé (engrais, irrigation, semences…)"
             aria-label="Libellé de la dépense"
-            className="h-10 rounded-xl"
+            className="h-10 rounded-xl bg-background"
           />
           <Input
             type="date"
             value={dateText}
             onChange={(e) => setDateText(e.target.value)}
             aria-label="Date de la dépense"
-            className="h-10 rounded-xl"
+            className="h-10 rounded-xl bg-background text-xs"
           />
-          <Button type="submit" className="h-10 rounded-xl">
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button type="submit" className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-semibold">
+            <Plus className="h-4 w-4" />
             Ajouter
           </Button>
         </form>
         {formError && <p className="mt-2 text-xs text-destructive">{formError}</p>}
 
         {spends.length > 0 && (
-          <ul className="mt-3 max-h-28 space-y-1.5 overflow-y-auto">
+          <ul className="mt-4 max-h-36 space-y-2 overflow-y-auto">
             {spends.slice(0, 6).map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-1.5 text-sm"
+                className="flex items-center justify-between gap-3 rounded-xl bg-accent/30 border border-border/50 px-3.5 py-2 text-sm"
               >
                 <div className="min-w-0">
-                  <div className="truncate font-medium">{entry.label}</div>
+                  <div className="truncate font-semibold text-foreground">{entry.label}</div>
                   <div className="text-xs text-muted-foreground">
                     {new Date(entry.date).toLocaleDateString("fr-FR")}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="font-display font-semibold">{formatEuro(entry.amount)}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-display font-bold text-foreground">{formatEuro(entry.amount)}</span>
                   <button
                     type="button"
                     onClick={() => onRemoveSpend(entry.id)}
-                    className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                    className="rounded-lg p-1 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                     aria-label="Supprimer la dépense"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -420,9 +419,9 @@ function HectareBar({ ratio }: { ratio: number }) {
     return () => cancelAnimationFrame(id);
   }, []);
   return (
-    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-primary/10">
+    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-emerald-500/10">
       <div
-        className="h-full rounded-full bg-gradient-to-r from-primary to-harvest transition-[width] duration-1000 ease-out"
+        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-[width] duration-1000 ease-out"
         style={{ width: ready ? `${Math.round(Math.min(ratio, 1) * 100)}%` : "0%" }}
       />
     </div>
@@ -510,8 +509,6 @@ function Page() {
       })),
       hardware_inventory: (user.equipements ?? []).map(equipementLabel),
     });
-    // Intentionnel : une fois par terrain/décision au montage
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, terrain?.id, decision?.decision_id]);
 
   const tasks = briefing?.analysis.tasks ?? [];
@@ -575,52 +572,61 @@ function Page() {
 
   return (
     <AppShell>
-      <PageHeader
-        icon={CalendarDays}
-        title="Aujourd'hui"
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <span className="capitalize">{dayLabel}</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              <span className="weather-live-dot !bg-primary" />
-              Briefing du matin
-            </span>
-          </span>
-        }
-      />
+      {/* Top Banner Command Header */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-900/90 via-slate-900 to-emerald-950 p-6 md:p-8 text-white shadow-xl border border-emerald-800/40">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/30">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Briefing du matin live
+              </span>
+              <span className="text-xs text-slate-300 capitalize">{dayLabel}</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              Bonjour, {user.nom} 👋
+            </h1>
+            <p className="text-xs md:text-sm text-slate-300 max-w-xl leading-relaxed">
+              Tableau de bord quotidien de votre parcelle <strong className="text-white">{terrain.nom || "Principale"}</strong>. Suivez les recommandations IA, la météo et le plan de travail du jour.
+            </p>
+          </div>
 
-      <div className="mt-4 flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={analyzeMutation.isPending}
-          onClick={() => {
-            const centroid = terrainCentroid(terrain.points);
-            if (!centroid) return;
-            analyzeMutation.mutate({
-              farmer_name: user.nom,
-              terrain_id: terrain.id,
-              location: {
-                latitude: centroid.lat,
-                longitude: centroid.lon,
-                label: terrain.region ?? terrain.nom ?? undefined,
-              },
-              crops: decision.allocations.map((a) => ({
-                crop_name: a.culture,
-                hectares: a.hectares_alloues,
-              })),
-              hardware_inventory: (user.equipements ?? []).map(equipementLabel),
-            });
-          }}
-        >
-          {analyzeMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          Actualiser
-        </Button>
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={analyzeMutation.isPending}
+              onClick={() => {
+                const centroid = terrainCentroid(terrain.points);
+                if (!centroid) return;
+                analyzeMutation.mutate({
+                  farmer_name: user.nom,
+                  terrain_id: terrain.id,
+                  location: {
+                    latitude: centroid.lat,
+                    longitude: centroid.lon,
+                    label: terrain.region ?? terrain.nom ?? undefined,
+                  },
+                  crops: decision.allocations.map((a) => ({
+                    crop_name: a.culture,
+                    hectares: a.hectares_alloues,
+                  })),
+                  hardware_inventory: (user.equipements ?? []).map(equipementLabel),
+                });
+              }}
+              className="bg-white/10 hover:bg-white/20 border-white/20 text-white gap-2 h-10 px-4 rounded-xl text-xs backdrop-blur-md"
+            >
+              {analyzeMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+              ) : (
+                <RefreshCw className="h-4 w-4 text-emerald-400" />
+              )}
+              Actualiser
+            </Button>
+          </div>
+        </div>
       </div>
 
       {analyzeMutation.isError && (
@@ -628,15 +634,22 @@ function Page() {
           <AlertBanner tone="danger" title="Briefing indisponible">
             {analyzeMutation.error instanceof MonitoringApiError
               ? analyzeMutation.error.message
-              : "Une erreur est survenue."}
+              : "Une erreur est survenue lors de la génération du briefing."}
           </AlertBanner>
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 md:items-stretch">
-        <AllocationSummaryCard totalHa={totalHa} culturesCount={allocations.length} />
+      {/* Top Metrics Cards Grid */}
+      <div className="mt-6 grid gap-4 md:grid-cols-2 md:items-stretch" data-tour="today-campaign">
+        <AllocationSummaryCard
+          totalHa={totalHa}
+          culturesCount={allocations.length}
+          terrainName={terrain.nom ?? undefined}
+        />
         <CostVsPlannedChart decision={decision} spends={spends} />
       </div>
+
+      {/* Spend Form */}
       <SpendInputCard
         spends={spends}
         onAddSpend={(input) => {
@@ -647,18 +660,19 @@ function Page() {
         }}
       />
 
+      {/* Crop Allocations Visualizer */}
       <Reveal delay={120} className="mt-6">
-        <div className="overflow-hidden rounded-3xl bg-card p-5 md:p-6 shadow-[0_12px_40px_-24px_rgba(28,43,28,0.4)] ring-1 ring-border/80">
+        <div className="overflow-hidden rounded-3xl bg-card p-5 md:p-6 shadow-sm ring-1 ring-border/80">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600">
                 <Sprout className="h-5 w-5" />
               </span>
               <div>
-                <h2 className="font-display text-xl font-semibold tracking-tight">
+                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
                   Allocation des cultures
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {totalHa.toFixed(1)} ha répartis sur {allocations.length} culture
                   {allocations.length > 1 ? "s" : ""}
                   {terrain.nom ? ` · ${terrain.nom}` : ""}
@@ -666,7 +680,7 @@ function Page() {
               </div>
             </div>
             {totalHa > 0 && (
-              <div className="flex h-3 w-full max-w-[12rem] overflow-hidden rounded-full sm:w-48">
+              <div className="flex h-3 w-full max-w-[12rem] overflow-hidden rounded-full sm:w-48 ring-1 ring-border/50">
                 {allocations.map((a) => (
                   <span
                     key={`${a.scenario_id}-${a.culture}`}
@@ -687,8 +701,8 @@ function Page() {
           <div className="mt-6 space-y-4">
             {allocations.map((a, i) => (
               <Reveal key={`${a.scenario_id}-${a.culture}`} from="left" delay={160 + i * 100}>
-                <div className="group flex items-center gap-3 md:gap-4">
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-border/70 shadow-sm transition duration-500 group-hover:scale-105 group-hover:rotate-1 md:h-14 md:w-14">
+                <div className="group flex items-center gap-3 md:gap-4 p-3 rounded-2xl bg-accent/20 border border-border/40 hover:border-emerald-500/30 transition duration-300">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-border/70 shadow-sm transition duration-500 group-hover:scale-105 md:h-14 md:w-14">
                     <img
                       src={cropImage(a.culture)}
                       alt={cultureLabel(a.culture)}
@@ -698,8 +712,8 @@ function Page() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="font-semibold">{cultureLabel(a.culture)}</span>
-                      <span className="text-sm font-medium tabular-nums text-muted-foreground">
+                      <span className="font-bold text-foreground text-sm">{cultureLabel(a.culture)}</span>
+                      <span className="text-xs font-semibold tabular-nums text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
                         {a.hectares_alloues} ha
                       </span>
                     </div>
@@ -712,51 +726,52 @@ function Page() {
         </div>
       </Reveal>
 
+      {/* Marketplace Waste Valorization CTA Banner */}
       {allocations[0] && (
         <Reveal delay={160} className="mt-6">
           <Link
             to="/marketplace/nouveau"
             search={{ kind: "dechet", culture: allocations[0].culture }}
-            className="group flex items-start gap-4 rounded-3xl border border-waste/30 bg-waste/10 p-5 transition hover:bg-waste/15"
+            className="group flex items-start gap-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-5 transition hover:border-emerald-500/50 hover:shadow-md"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-card text-waste-foreground">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
               <Recycle className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-lg font-semibold">
+              <div className="font-display text-lg font-bold text-foreground flex items-center gap-2">
                 Valorisez les déchets de {cultureLabel(allocations[0].culture)}
+                <ArrowRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-1 transition duration-300" />
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
                 Après la récolte (prévue le{" "}
-                {new Date(allocations[0].date_maturite_prevue).toLocaleDateString("fr-FR")}
-                ), déposez paille, balles et autres résidus sur la marketplace.
+                <strong className="text-foreground">
+                  {new Date(allocations[0].date_maturite_prevue).toLocaleDateString("fr-FR")}
+                </strong>
+                ), déposez paille, balles et autres résidus sur la marketplace pour générer un revenu complémentaire.
               </p>
             </div>
           </Link>
         </Reveal>
       )}
 
+      {/* AI Farmer Briefing Card */}
       <Reveal delay={80} className="mt-6" threshold={0.05}>
-        <div className="relative overflow-hidden rounded-3xl bg-[#E8F2E9] p-5 md:p-6 ring-1 ring-primary/10">
-          <div
-            className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl"
-            aria-hidden
-          />
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-900/10 via-card to-card p-5 md:p-6 ring-1 ring-emerald-500/20 shadow-sm" data-tour="today-briefing">
           <div className="relative flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8D5B0]/70 text-[#8B6914]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600">
                 <Bell className="h-5 w-5" />
               </span>
               <div>
-                <h2 className="font-display text-xl font-semibold tracking-tight text-primary">
-                  Briefing agriculteur
+                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
+                  Briefing Agriculteur
                 </h2>
-                <p className="text-sm font-medium capitalize text-primary/70">{dayLabel}</p>
+                <p className="text-xs font-semibold capitalize text-muted-foreground">{dayLabel}</p>
               </div>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky/40 px-3 py-1 text-xs font-semibold text-sky-foreground">
-              <Bell className="h-3.5 w-3.5" />
-              Quotidien
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-600 border border-emerald-500/20">
+              <Zap className="h-3.5 w-3.5 text-emerald-500" />
+              Recommandation Quotidienne
             </span>
           </div>
 
@@ -775,12 +790,13 @@ function Page() {
                 </div>
               )}
 
-              <div className="relative mt-5 rounded-2xl bg-[#D7E8D9]/80 p-4 ring-1 ring-primary/10">
-                <div className="mb-3 flex items-center gap-2 font-semibold text-primary">
-                  <CloudSun className="h-4 w-4 text-waste" />
+              {/* Weather Summary Bar */}
+              <div className="relative mt-5 rounded-2xl bg-accent/30 p-4 border border-border/50">
+                <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                  <CloudSun className="h-4 w-4 text-amber-500" />
                   Météo du jour
                   {weather?.location_label ? (
-                    <span className="text-sm font-medium text-primary/60">
+                    <span className="text-xs font-medium text-muted-foreground">
                       · {weather.location_label}
                     </span>
                   ) : null}
@@ -819,14 +835,14 @@ function Page() {
                   ].map(({ icon: Icon, label, hint }) => (
                     <div
                       key={hint}
-                      className="flex items-start gap-2.5 rounded-xl bg-white/55 px-3 py-2.5 backdrop-blur-sm transition hover:-translate-y-0.5"
+                      className="flex items-start gap-2.5 rounded-xl bg-card p-3 border border-border/50 shadow-sm"
                     >
-                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                       <div className="min-w-0">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                           {hint}
                         </p>
-                        <p className="text-sm font-semibold leading-snug text-foreground">
+                        <p className="text-xs font-bold text-foreground">
                           {label}
                         </p>
                       </div>
@@ -835,19 +851,20 @@ function Page() {
                 </div>
               </div>
 
-              <div className="relative mt-3 flex gap-3 rounded-2xl bg-sky/25 p-4 ring-1 ring-sky/40">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky/50 text-sky-foreground">
+              {/* Irrigation Advice */}
+              <div className="relative mt-4 flex gap-3.5 rounded-2xl bg-blue-500/10 p-4 border border-blue-500/20">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white shadow-sm">
                   <Droplets className="h-5 w-5" />
                 </span>
                 <div>
-                  <h3 className="font-semibold text-primary">Gestion de l&apos;irrigation</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-foreground/80">
+                  <h3 className="font-bold text-sm text-foreground">Gestion de l&apos;irrigation</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {briefing?.analysis.daily_advice ??
-                      "Le briefing arrive…"}
+                      "Calcul du conseil personnalisé en cours…"}
                   </p>
                   {briefing?.analysis.water_saving_technique ? (
-                    <p className="mt-2 text-sm leading-relaxed text-primary/80">
-                      {briefing.analysis.water_saving_technique}
+                    <p className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      💡 {briefing.analysis.water_saving_technique}
                     </p>
                   ) : null}
                 </div>
@@ -857,18 +874,19 @@ function Page() {
         </div>
       </Reveal>
 
+      {/* Crop Vigilance Section */}
       {cropAlerts.length > 0 && (
         <div className="mt-8">
           <Reveal className="mb-4 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-waste" />
-            <h2 className="font-display text-xl font-semibold tracking-tight">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
               Vigilance cultures
             </h2>
           </Reveal>
           <div className="grid gap-3">
             {cropAlerts.map((alert, i) => (
               <Reveal key={`${alert.crop}-${i}`} from="up" delay={i * 100}>
-                <div className="group flex flex-col gap-3 rounded-2xl bg-card p-3.5 ring-1 ring-border/80 transition-all duration-400 hover:-translate-y-0.5 hover:shadow-lift sm:flex-row sm:items-center sm:gap-4 sm:p-4">
+                <div className="group flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border/80 shadow-sm transition-all duration-300 hover:border-amber-500/40 sm:flex-row sm:items-center sm:gap-4">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-border/60 transition duration-500 group-hover:scale-105">
                       <img
@@ -880,26 +898,26 @@ function Page() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">{cultureLabel(alert.crop)}</span>
+                        <span className="font-bold text-sm text-foreground">{cultureLabel(alert.crop)}</span>
                         <span
                           className={cn(
-                            "rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+                            "rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
                             alert.risk === "high"
-                              ? "bg-destructive/15 text-destructive"
+                              ? "bg-destructive/15 text-destructive border border-destructive/20"
                               : alert.risk === "medium"
-                                ? "bg-waste/25 text-waste-foreground"
-                                : "bg-harvest/20 text-harvest",
+                                ? "bg-amber-500/15 text-amber-600 border border-amber-500/20"
+                                : "bg-emerald-500/15 text-emerald-600 border border-emerald-500/20",
                           )}
                         >
                           {riskLabel(alert.risk)}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {alert.message}
                       </p>
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-primary sm:max-w-[16rem] sm:text-right">
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 sm:max-w-[16rem] sm:text-right">
                     → {alert.action}
                   </p>
                 </div>
@@ -909,34 +927,33 @@ function Page() {
         </div>
       )}
 
+      {/* Plan du jour (Checklist Tasks) */}
       {tasks.length > 0 && (
         <Reveal delay={100} className="mt-8">
-          <div className="overflow-hidden rounded-3xl bg-card p-5 md:p-6 shadow-[0_12px_40px_-24px_rgba(28,43,28,0.35)] ring-1 ring-border/80">
+          <div className="overflow-hidden rounded-3xl bg-card p-5 md:p-6 shadow-sm ring-1 ring-border/80" data-tour="today-tasks">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600">
                   <CheckCircle2 className="h-5 w-5" />
                 </span>
                 <div>
-                  <h2 className="font-display text-xl font-semibold tracking-tight">
+                  <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
                     Plan du jour
                   </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {doneCount}/{tasks.length} terminée{doneCount > 1 ? "s" : ""}
+                  <p className="text-xs text-muted-foreground">
+                    {doneCount}/{tasks.length} tâche{tasks.length > 1 ? "s" : ""} terminée{doneCount > 1 ? "s" : ""}
                   </p>
                 </div>
               </div>
-              <div className="h-2 w-28 overflow-hidden rounded-full bg-primary/10 sm:w-36">
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-                  style={{
-                    width: `${tasks.length ? (doneCount / tasks.length) * 100 : 0}%`,
-                  }}
-                />
+              <div className="flex items-center gap-3">
+                <Progress value={(doneCount / tasks.length) * 100} className="h-2 w-28 sm:w-36 bg-emerald-500/10" />
+                <span className="text-xs font-bold text-emerald-600">
+                  {Math.round((doneCount / tasks.length) * 100)}%
+                </span>
               </div>
             </div>
 
-            <ul className="mt-5 space-y-2">
+            <ul className="mt-5 space-y-2.5">
               {tasks.map((task, i) => {
                 const checked = Boolean(done[i]);
                 return (
@@ -945,25 +962,25 @@ function Page() {
                       type="button"
                       onClick={() => toggle(i)}
                       className={cn(
-                        "press flex w-full items-start gap-3 rounded-2xl border px-3.5 py-3 text-left transition-all duration-300",
+                        "flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-all duration-300 shadow-sm",
                         checked
-                          ? "border-primary/25 bg-primary/5"
-                          : "border-border/80 bg-background/60 hover:border-primary/30 hover:bg-secondary/40",
+                          ? "border-emerald-500/30 bg-emerald-500/5 opacity-80"
+                          : "border-border/80 bg-background hover:border-emerald-500/40 hover:bg-accent/30",
                       )}
                     >
                       <span
                         className={cn(
                           "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all duration-300",
                           checked
-                            ? "scale-100 border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/35 bg-card",
+                            ? "scale-105 border-emerald-600 bg-emerald-600 text-white"
+                            : "border-slate-300 dark:border-slate-700 bg-card",
                         )}
                       >
                         {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                       </span>
                       <span
                         className={cn(
-                          "text-sm leading-snug transition-colors",
+                          "text-xs md:text-sm font-semibold leading-relaxed transition-colors",
                           checked
                             ? "text-muted-foreground line-through"
                             : "text-foreground",
@@ -979,6 +996,7 @@ function Page() {
           </div>
         </Reveal>
       )}
+      <PageTour tourId="aujourd-hui" />
     </AppShell>
   );
 }

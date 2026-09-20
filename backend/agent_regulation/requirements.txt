@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 langchain-core
 langchain-mistralai
+langgraph>=0.2.0
 mistralai==1.5.1
 qdrant-client
 fastembed

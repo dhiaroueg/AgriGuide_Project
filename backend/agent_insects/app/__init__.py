@@ -1,0 +1,1 @@
+"""Insect detection and alert mapping agent."""

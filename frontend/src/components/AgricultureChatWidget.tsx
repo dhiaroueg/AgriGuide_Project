@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation } from "@tanstack/react-query";
-import { MessageCircle, Send, User, X } from "lucide-react";
+import { Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WaitingMascot } from "@/components/chat/WaitingMascot";
 import { TypewriterMarkdown } from "@/components/chat/TypewriterMarkdown";
+import { MessageActions } from "@/components/chat/MessageActions";
+import { VoiceInputButton } from "@/components/chat/VoiceInputButton";
 import { MarkdownLite } from "@/lib/markdownLite";
 import { cn } from "@/lib/utils";
 import {
@@ -29,8 +31,24 @@ type UiMessage = {
 const WELCOME =
   "Bonjour ! Je suis un agent IA qui vous répond automatiquement. Posez-moi une question sur l'agriculture en général, ou sur la parcelle actuellement sélectionnée si vous en avez analysé une.";
 
+const GENERAL_SUGGESTIONS = [
+  "Quelles cultures pour un sol calcaire ?",
+  "Comment optimiser l'apport d'azote au blé ?",
+  "Quels sont les avantages des couverts végétaux ?",
+  "Comment interpréter l'indice NDVI ?",
+];
+
+const PARCEL_SUGGESTIONS = [
+  "Quelles sont les cultures idéales sur ce terrain ?",
+  "Comment est la fertilité et le sol de ma parcelle ?",
+  "Quel est le bilan hydrique et météo récent ?",
+  "Quelle dose d'azote recommandes-tu ici ?",
+];
+
+const MISTRAL_AVATAR = "/logo_mistral_O.jpg";
+const FARMER_USER_AVATAR = "/img/farmer-user.avif";
+
 /**
- * Widget flottant, ouvert depuis une icône en bas à droite. Répond aux
  * questions générales (RAG), à la parcelle sélectionnée (`parcelContext`),
  * et au profil connecté (terrains / matériel lus en base via le JWT).
  */
@@ -102,12 +120,17 @@ export function AgricultureChatWidget({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Fermer l'assistant" : "Ouvrir l'assistant agricole"}
+        data-tour="agri-chat-fab"
         className={cn(
-          "fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-[0_12px_32px_-12px_rgba(28,43,28,0.55)] transition-transform duration-200 hover:scale-105",
+          "fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-[0_12px_32px_-12px_rgba(28,43,28,0.55)] transition-transform duration-200 hover:scale-105",
           "bg-primary text-primary-foreground ring-1 ring-primary/30",
         )}
       >
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        {open ? (
+          <X className="h-6 w-6" />
+        ) : (
+          <img src={MISTRAL_AVATAR} alt="Ouvrir l'assistant agricole" className="h-full w-full object-cover" />
+        )}
       </button>
 
       {/* Panneau de chat */}
@@ -119,7 +142,7 @@ export function AgricultureChatWidget({
         >
           <header className="flex items-center gap-3 border-b border-border/70 bg-gradient-to-r from-primary/10 via-card to-card px-4 py-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/15 text-primary ring-1 ring-primary/20">
-              <img src="/logo_mistral_O.jpg" alt="Agent" className="h-full w-full object-cover" />
+              <img src={MISTRAL_AVATAR} alt="Assistant Mistral" className="h-full w-full object-cover" />
             </span>
             <div className="min-w-0">
               <div className="font-display text-sm font-semibold tracking-tight">Assistant agricole</div>
@@ -144,7 +167,7 @@ export function AgricultureChatWidget({
               <div key={m.id} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "justify-start")}>
                 {m.role === "assistant" && (
                   <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-primary ring-1 ring-border/70">
-                    <img src="/logo_mistral_O.jpg" alt="Agent" className="h-full w-full object-cover" />
+                    <img src={MISTRAL_AVATAR} alt="" className="h-full w-full object-cover" />
                   </span>
                 )}
                 <div
@@ -175,6 +198,14 @@ export function AgricultureChatWidget({
                   ) : (
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
                   )}
+                  {m.role === "assistant" && (
+                    <MessageActions
+                      messageId={m.id}
+                      text={m.text}
+                      agent="agriculture"
+                      disabled={Boolean(m.animate)}
+                    />
+                  )}
                   {m.role === "assistant" && !m.animate && m.sources && m.sources.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/50 pt-2">
                       {m.sources.map((s) => (
@@ -192,8 +223,8 @@ export function AgricultureChatWidget({
                   )}
                 </div>
                 {m.role === "user" && (
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/20">
-                    <User className="h-3.5 w-3.5" />
+                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 ring-1 ring-primary/20">
+                    <img src={FARMER_USER_AVATAR} alt="Vous" className="h-full w-full object-contain p-0.5" />
                   </span>
                 )}
               </div>
@@ -202,7 +233,7 @@ export function AgricultureChatWidget({
             {chatMutation.isPending && (
               <div className="flex gap-2">
                 <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-primary ring-1 ring-border/70">
-                  <img src="/logo_mistral_O.jpg" alt="Agent" className="h-full w-full object-cover" />
+                  <img src={MISTRAL_AVATAR} alt="" className="h-full w-full object-cover" />
                 </span>
                 <WaitingMascot label="Réflexion en cours…" />
               </div>
@@ -213,7 +244,28 @@ export function AgricultureChatWidget({
           </div>
 
           <footer className="border-t border-border/70 bg-card/95 p-2.5">
+            {!messages.some((m) => m.role === "user") && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {(parcelContext ? PARCEL_SUGGESTIONS : GENERAL_SUGGESTIONS).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => send(s)}
+                    disabled={chatMutation.isPending}
+                    className="inline-flex items-center gap-1 rounded-full border border-border/80 bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground transition-all duration-200 hover:border-primary/40 hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50 text-left cursor-pointer"
+                  >
+                    <Sparkles className="h-2.5 w-2.5 text-primary shrink-0" />
+                    <span>{s}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2">
+              <VoiceInputButton
+                disabled={chatMutation.isPending}
+                onTranscript={(text) => setInput(text)}
+                size="sm"
+              />
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

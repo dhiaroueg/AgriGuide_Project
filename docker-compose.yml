@@ -16,6 +16,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./database/migration_marketplace_professional.sql:/docker-entrypoint-initdb.d/20-marketplace-professional.sql
 
   redis:
     image: redis:7-alpine
@@ -47,6 +48,8 @@ services:
   agent_business:
     build: ./backend/agent_business
     env_file: .env
+    ports:
+      - "8000:8000"
     environment:
       MARKET_DATA_DIR: /data/market
       AGRESTE_DATA_DIR: /data/market
@@ -60,6 +63,8 @@ services:
   agent_regulation:
     build: ./backend/agent_regulation
     env_file: .env
+    ports:
+      - "8005:8000"
     depends_on: [db]
 
   agent_monitoring:
@@ -72,6 +77,8 @@ services:
   marketplace:
     build: ./backend/marketplace
     env_file: .env
+    ports:
+      - "8007:8000"
     depends_on: [db]
 
 volumes:

@@ -305,3 +305,117 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: list[ChatSource] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Multi-temporal Satellite Timeline — /agriculture/parcel/satellite_timeline
+# ---------------------------------------------------------------------------
+
+
+class SatelliteTimelineRequest(BaseModel):
+    geometry: dict
+    index_type: Literal["ndvi", "ndwi", "rgb"] = "ndvi"
+    target_date: Optional[str] = None  # ISO format "YYYY-MM-DD" or "YYYY-MM"
+    compare_year_prior: bool = False
+
+
+class SatelliteIndexStats(BaseModel):
+    mean: float
+    min: float
+    max: float
+    std: float
+    vigor_class: str
+    water_stress_class: Optional[str] = None
+    cloud_cover_pct: float = 0.0
+    distribution_pct: dict[str, float] = Field(default_factory=dict)
+
+
+class SatelliteTimelinePoint(BaseModel):
+    date: str
+    label: str
+    ndvi: float
+    ndwi: float
+    prior_year_ndvi: Optional[float] = None
+    prior_year_ndwi: Optional[float] = None
+    cloud_cover_pct: float = 0.0
+
+
+class SatelliteTimelineResponse(BaseModel):
+    index_type: Literal["ndvi", "ndwi", "rgb"]
+    target_date: str
+    image_base64: Optional[str] = None
+    bounds: Optional[dict] = None
+    stats: SatelliteIndexStats
+    timeline: list[SatelliteTimelinePoint] = Field(default_factory=list)
+    prior_year_image_base64: Optional[str] = None
+    delta_pct: Optional[float] = None
+    warning: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Bilan Carbone & Crédits Carbone Agricoles — /agriculture/carbon/estimate
+# ---------------------------------------------------------------------------
+
+
+class CarbonCalculationRequest(BaseModel):
+    area_ha: float = Field(..., gt=0)
+    tillage_practice: Literal["semis_direct", "travail_reduit", "labour_conventionnel"] = "semis_direct"
+    cover_crop: Literal["couvert_permanent", "couvert_intermediaire", "aucun"] = "couvert_intermediaire"
+    organic_amendments: Literal["compost", "fumier", "aucun"] = "compost"
+    residue_management: Literal["restitution_sol", "exportation_paille"] = "restitution_sol"
+    soil_carbon_g_kg: Optional[float] = None
+    clay_pct: Optional[float] = None
+
+
+class CarbonCalculationResponse(BaseModel):
+    area_ha: float
+    sequestration_rate_t_co2e_ha_yr: float
+    total_sequestration_t_co2e_yr: float
+    estimated_credit_value_eur_yr: float
+    credit_price_per_ton_eur: float
+    carbon_rating: str  # e.g., "A+ Excellent", "B Bon", "C Moyen"
+    practices_score_pct: float
+    breakdown_by_practice: dict[str, float]  # tCO2e/yr added per practice
+    recommendations: list[str]
+    certification_eligible: bool
+
+
+# ---------------------------------------------------------------------------
+# Cartes de Modulation VRA (Azote) — /agriculture/vra/prescription
+# ---------------------------------------------------------------------------
+
+
+class VraPrescriptionRequest(BaseModel):
+    geometry: dict
+    area_ha: float = Field(..., gt=0)
+    crop_type: str  # e.g. "Blé tendre", "Maïs", "Colza"
+    target_yield_q_ha: float = Field(default=80.0, gt=0)
+    total_n_budget_kg_ha: float = Field(default=170.0, gt=0)
+    strategy: Literal["ndvi_proportional", "soil_potential", "protein_optimization"] = "ndvi_proportional"
+    fertilizer_unit_cost_eur_kg: float = Field(default=1.35, gt=0)  # € per kg N
+
+
+class VraZonePrescription(BaseModel):
+    zone_id: str
+    label: str  # e.g. "Zone Haute Vigueur", "Zone Vigueur Moyenne", "Zone Stress / Faible Vigueur"
+    ndvi_range: str
+    area_pct: float
+    area_ha: float
+    prescribed_n_dose_kg_ha: float
+    total_n_zone_kg: float
+    color_hex: str
+
+
+class VraPrescriptionResponse(BaseModel):
+    crop_type: str
+    area_ha: float
+    strategy: str
+    base_n_budget_kg_ha: float
+    modulated_avg_n_dose_kg_ha: float
+    n_saved_total_kg: float
+    savings_eur: float
+    savings_pct: float
+    zones: list[VraZonePrescription]
+    isobus_task_data_json: str  # ISOBUS XML / JSON format string for tractor computer
+    csv_prescription: str       # CSV string for export
+

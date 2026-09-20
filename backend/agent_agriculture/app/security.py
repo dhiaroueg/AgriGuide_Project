@@ -45,12 +45,24 @@ def get_optional_user_id(authorization: str | None = Header(default=None)) -> st
 
     Invalid/expired tokens still raise 401 so a stale session is not silently
     treated as anonymous.
+
+    Exception: the literal token "dev-bypass-token" sent by the frontend when
+    VITE_SKIP_AUTH=true is treated as anonymous (no user id) rather than raising
+    a 401 — this mirrors the AGRI_AUTH_DISABLED=true dev bypass already in .env.
     """
+    # Dev bypass: no auth header → anonymous
     if not authorization:
         return None
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="En-tête Authorization invalide.")
+    raw_token = authorization.split(" ", 1)[1].strip()
+    # Frontend VITE_SKIP_AUTH=true sends the literal string "dev-bypass-token".
+    # Treat it as anonymous so the chatbot works without a real JWT in dev mode.
+    auth_disabled = os.getenv("AGRI_AUTH_DISABLED", "").lower() in ("1", "true", "yes")
+    if auth_disabled or raw_token == "dev-bypass-token":
+        return None
     try:
-        return decode_access_token(authorization.split(" ", 1)[1].strip())
+        return decode_access_token(raw_token)
     except ValueError:
         raise HTTPException(status_code=401, detail="Session invalide, reconnectez-vous.")
+

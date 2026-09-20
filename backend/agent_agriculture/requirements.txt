@@ -5,6 +5,12 @@ pydantic-settings==2.5.2
 httpx==0.27.2
 tenacity==9.0.0
 psycopg2-binary==2.9.9
+python-multipart>=0.0.9
+
+# LangGraph for dynamic control shifts
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-mistralai>=0.2.0
 # unstructured 0.15.13 needs numpy 1.x; 1.26.4 is the last 1.x with cp312 wheels.
 numpy==1.26.4
 requests==2.32.3

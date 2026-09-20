@@ -144,7 +144,7 @@ def _collect_candidate_results(question: str) -> list[WebSearchResult]:
 def _get_extraction_llm():
     """Retourne le LLM d'extraction structurée (mis en cache)."""
     settings = get_settings()
-    llm = ChatMistralAI(model="mistral-small-latest", mistral_api_key=settings.mistral_api_key, temperature=0)
+    llm = ChatMistralAI(model=settings.mistral_model, mistral_api_key=settings.mistral_api_key, temperature=0)
     return llm.with_structured_output(_ExtractionOutput)
 
 

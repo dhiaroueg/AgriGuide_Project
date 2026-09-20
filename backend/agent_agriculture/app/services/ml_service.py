@@ -239,7 +239,7 @@ def recommend_crops(
                 },
             )
         )
-    return sorted(recs, key=lambda r: r.suitability_score, reverse=True)
+    return sorted(recs, key=lambda r: r.suitability_score, reverse=True)[:5]
 
 
 # Typical crop-cycle length (days from sowing to harvest) for the full

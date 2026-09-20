@@ -75,6 +75,8 @@ class EtudeMarche(BaseModel):
     concurrence: Optional[str] = None
     rendement_std_kg_par_ha: Optional[float] = None
     rendement_fallback: bool = True
+    prix_fallback: bool = True
+    prix_date: Optional[str] = None
 
 
 

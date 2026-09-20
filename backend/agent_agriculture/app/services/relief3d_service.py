@@ -227,9 +227,12 @@ async def build_relief_grid(geometry_geojson: dict, max_dimension: int = 128) ->
             "ndwi_moyen": round(float(np.mean(ndwi_valid)), 3) if ndwi_valid.size else None,
             "ndwi_min": round(float(np.min(ndwi_valid)), 3) if ndwi_valid.size else None,
             "ndwi_max": round(float(np.max(ndwi_valid)), 3) if ndwi_valid.size else None,
+            "signal_eau_libre_pct": round(float(np.mean(ndwi_valid > 0.15) * 100), 1) if ndwi_valid.size else None,
             "ndmi_moyen": round(float(np.mean(ndmi_valid)), 3) if ndmi_valid.size else None,
             "ndmi_min": round(float(np.min(ndmi_valid)), 3) if ndmi_valid.size else None,
             "ndmi_max": round(float(np.max(ndmi_valid)), 3) if ndmi_valid.size else None,
+            "vegetation_faible_pct": round(float(np.mean(ndvi_valid < 0.2) * 100), 1) if ndvi_valid.size else None,
+            "humidite_vegetation_faible_pct": round(float(np.mean(ndmi_valid < 0) * 100), 1) if ndmi_valid.size else None,
             "couverture_pct": round(float(valid_satellite.sum() / valid_terrain.sum() * 100), 1) if valid_terrain.any() else 0.0,
         },
         "stats_pente": {

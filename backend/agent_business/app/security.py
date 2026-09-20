@@ -11,7 +11,15 @@ import time
 from fastapi import Header, HTTPException
 
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me-in-production")
+def _jwt_secret_key() -> str:
+    """Lit la clé au moment de la validation.
+
+    `app.main` charge le `.env` pendant son initialisation, après que certains
+    routeurs ont importé ce module. Une constante évaluée à l'import pouvait
+    donc garder la valeur de développement et invalider tous les JWT émis par
+    Auth malgré une clé correctement définie dans `.env`.
+    """
+    return os.getenv("JWT_SECRET_KEY", "dev-secret-change-me-in-production")
 
 
 def _decode_segment(segment: str) -> bytes:
@@ -22,7 +30,7 @@ def decode_access_token(token: str) -> str:
     try:
         header_segment, payload_segment, signature_segment = token.split(".")
         signed = f"{header_segment}.{payload_segment}".encode()
-        expected = hmac.new(JWT_SECRET_KEY.encode(), signed, hashlib.sha256).digest()
+        expected = hmac.new(_jwt_secret_key().encode(), signed, hashlib.sha256).digest()
         actual = _decode_segment(signature_segment)
         if not hmac.compare_digest(expected, actual):
             raise ValueError("signature")

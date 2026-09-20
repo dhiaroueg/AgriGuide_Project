@@ -1,0 +1,16 @@
+# LangGraph and LangChain dependencies for dynamic control shifts
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-mistralai>=0.2.0
+
+# Existing dependencies
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# HTTP requests
+urllib3>=2.0.0
+
+# Type checking
+typing-extensions>=4.0.0

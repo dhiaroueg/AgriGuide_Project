@@ -1,0 +1,9 @@
+Metric,Value
+Recall (existence-based injected errors caught),1.0
+Precision (flagged figures that were genuinely injected),0.811
+Noise false positives (plausible rounding artifacts),7.0
+Noise figures injected,20.0
+Existence/noise position overlaps,0.0
+Precision with plausible noise,0.811
+Baseline false-positive rate (per clean report),0.0
+Recall on semantic-mismatch errors (documented limitation),0.0

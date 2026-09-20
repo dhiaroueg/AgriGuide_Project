@@ -14,6 +14,10 @@ export type Listing = {
   utility?: string;
   contact: { phone: string; email: string };
   status?: "disponible" | "reserve" | "expire";
+  deliveryModes: ("retrait_sur_place" | "livraison" | "point_relais")[];
+  deliveryRadiusKm: number;
+  certifications: string[];
+  seller: { name: string; verified: boolean; rating: number; reviewCount: number };
   mine?: boolean;
 };
 
@@ -33,6 +37,8 @@ export const listings: Listing[] = [
       "Récolte 2026, blé tendre bio certifié AB. Taux de protéines 11,8%. Livraison possible dans un rayon de 40 km.",
     contact: { phone: "06 12 34 56 78", email: "jean.martin@fermedespres.fr" },
     status: "disponible",
+    deliveryModes: ["retrait_sur_place", "livraison"], deliveryRadiusKm: 40, certifications: ["Agriculture biologique (AB)"],
+    seller: { name: "Jean Martin", verified: true, rating: 4.9, reviewCount: 18 },
     mine: true,
   },
   {
@@ -51,6 +57,8 @@ export const listings: Listing[] = [
     utility: "Idéale pour la litière animale, le paillage de sol ou l'isolation naturelle.",
     contact: { phone: "07 88 22 44 11", email: "contact@fermedelabatie.fr" },
     status: "disponible",
+    deliveryModes: ["retrait_sur_place"], deliveryRadiusKm: 0, certifications: [],
+    seller: { name: "Ferme de la Bâtie", verified: true, rating: 4.7, reviewCount: 11 },
     mine: true,
   },
   {
@@ -67,6 +75,8 @@ export const listings: Listing[] = [
     description: "Colza HOLL, débouché huile alimentaire. Livraison assurée.",
     contact: { phone: "06 55 44 33 22", email: "amelie@grangehaut.fr" },
     status: "disponible",
+    deliveryModes: ["livraison", "point_relais"], deliveryRadiusKm: 80, certifications: ["HVE niveau 3"],
+    seller: { name: "Amélie Durand", verified: true, rating: 4.8, reviewCount: 24 },
   },
   {
     id: "4",
@@ -84,6 +94,8 @@ export const listings: Listing[] = [
     utility: "Compostage, méthanisation, ou distillation artisanale.",
     contact: { phone: "06 77 88 99 00", email: "domaine@coteauxsud.fr" },
     status: "disponible",
+    deliveryModes: ["retrait_sur_place"], deliveryRadiusKm: 0, certifications: ["Bio"],
+    seller: { name: "Domaine Coteaux Sud", verified: true, rating: 4.6, reviewCount: 8 },
   },
   {
     id: "5",
@@ -99,6 +111,8 @@ export const listings: Listing[] = [
     description: "Récolte propre, taux d'huile 43%. Prêt à charger.",
     contact: { phone: "06 11 22 33 44", email: "pierre.laurent@agri.fr" },
     status: "reserve",
+    deliveryModes: ["livraison"], deliveryRadiusKm: 60, certifications: [],
+    seller: { name: "Pierre Laurent", verified: false, rating: 4.5, reviewCount: 4 },
     mine: true,
   },
   {
@@ -116,5 +130,7 @@ export const listings: Listing[] = [
     utility: "Amendement organique riche en azote, potassium et phosphore.",
     contact: { phone: "06 45 67 89 10", email: "elevage.dupre@gmail.com" },
     status: "disponible",
+    deliveryModes: ["retrait_sur_place", "livraison"], deliveryRadiusKm: 25, certifications: ["Label Rouge"],
+    seller: { name: "Élevage Dupré", verified: true, rating: 4.9, reviewCount: 30 },
   },
 ];

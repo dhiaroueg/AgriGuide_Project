@@ -209,9 +209,12 @@ export type ReliefGrid = {
       ndwi_moyen: number | null;
       ndwi_min: number | null;
       ndwi_max: number | null;
+      signal_eau_libre_pct: number | null;
       ndmi_moyen: number | null;
       ndmi_min: number | null;
       ndmi_max: number | null;
+      vegetation_faible_pct: number | null;
+      humidite_vegetation_faible_pct: number | null;
     couverture_pct: number;
   };
   stats_pente: { moyenne_pct: number; p95_pct: number; max_pct: number };
@@ -354,3 +357,147 @@ export function sendChatMessage(
 ): Promise<ChatResponse> {
   return postJson<ChatResponse>("/agriculture/chat", request, token);
 }
+
+// ---------------------------------------------------------------------------
+// Multi-temporal Satellite Timeline (NDVI, NDWI, RGB & N vs N-1)
+// ---------------------------------------------------------------------------
+
+export type SatelliteIndexType = "ndvi" | "ndwi" | "rgb";
+
+export type SatelliteIndexStats = {
+  mean: number;
+  min: number;
+  max: number;
+  std: number;
+  vigor_class: string;
+  water_stress_class?: string | null;
+  cloud_cover_pct: number;
+  distribution_pct: {
+    optimal: number;
+    moderate: number;
+    stressed: number;
+  };
+};
+
+export type SatelliteTimelinePoint = {
+  date: string;
+  label: string;
+  ndvi: number;
+  ndwi: number;
+  prior_year_ndvi?: number | null;
+  prior_year_ndwi?: number | null;
+  cloud_cover_pct: number;
+};
+
+export type SatelliteTimelineResponse = {
+  index_type: SatelliteIndexType;
+  target_date: string;
+  image_base64: string | null;
+  bounds: {
+    south: number;
+    west: number;
+    north: number;
+    east: number;
+  } | null;
+  stats: SatelliteIndexStats;
+  timeline: SatelliteTimelinePoint[];
+  prior_year_image_base64?: string | null;
+  delta_pct?: number | null;
+  warning?: string | null;
+};
+
+export type SatelliteTimelineRequest = {
+  geometry: Record<string, unknown>;
+  index_type?: SatelliteIndexType;
+  target_date?: string | null;
+  compare_year_prior?: boolean;
+};
+
+/** POST /agriculture/parcel/satellite_timeline — analyse multi-temporelle Sentinel-2 */
+export function fetchSatelliteTimeline(
+  request: SatelliteTimelineRequest,
+  token?: string | null,
+): Promise<SatelliteTimelineResponse> {
+  return postJson<SatelliteTimelineResponse>("/agriculture/parcel/satellite_timeline", request, token);
+}
+
+// ---------------------------------------------------------------------------
+// Bilan Carbone & Crédits Carbone Agricoles
+// ---------------------------------------------------------------------------
+
+export type CarbonCalculationRequest = {
+  area_ha: number;
+  tillage_practice?: "semis_direct" | "travail_reduit" | "labour_conventionnel";
+  cover_crop?: "couvert_permanent" | "couvert_intermediaire" | "aucun";
+  organic_amendments?: "compost" | "fumier" | "aucun";
+  residue_management?: "restitution_sol" | "exportation_paille";
+  soil_carbon_g_kg?: number | null;
+  clay_pct?: number | null;
+};
+
+export type CarbonCalculationResponse = {
+  area_ha: number;
+  sequestration_rate_t_co2e_ha_yr: number;
+  total_sequestration_t_co2e_yr: number;
+  estimated_credit_value_eur_yr: number;
+  credit_price_per_ton_eur: number;
+  carbon_rating: string;
+  practices_score_pct: number;
+  breakdown_by_practice: Record<string, number>;
+  recommendations: string[];
+  certification_eligible: boolean;
+};
+
+export function estimateCarbonCredits(
+  request: CarbonCalculationRequest,
+  token?: string | null,
+): Promise<CarbonCalculationResponse> {
+  return postJson<CarbonCalculationResponse>("/agriculture/carbon/estimate", request, token);
+}
+
+// ---------------------------------------------------------------------------
+// Cartes de Modulation VRA (Azote / Engrais)
+// ---------------------------------------------------------------------------
+
+export type VraPrescriptionRequest = {
+  geometry: Record<string, unknown>;
+  area_ha: number;
+  crop_type: string;
+  target_yield_q_ha?: number;
+  total_n_budget_kg_ha?: number;
+  strategy?: "ndvi_proportional" | "soil_potential" | "protein_optimization";
+  fertilizer_unit_cost_eur_kg?: number;
+};
+
+export type VraZonePrescription = {
+  zone_id: string;
+  label: string;
+  ndvi_range: string;
+  area_pct: number;
+  area_ha: number;
+  prescribed_n_dose_kg_ha: number;
+  total_n_zone_kg: number;
+  color_hex: string;
+};
+
+export type VraPrescriptionResponse = {
+  crop_type: string;
+  area_ha: number;
+  strategy: string;
+  base_n_budget_kg_ha: number;
+  modulated_avg_n_dose_kg_ha: number;
+  n_saved_total_kg: number;
+  savings_eur: number;
+  savings_pct: number;
+  zones: VraZonePrescription[];
+  isobus_task_data_json: string;
+  csv_prescription: string;
+};
+
+export function generateVraPrescription(
+  request: VraPrescriptionRequest,
+  token?: string | null,
+): Promise<VraPrescriptionResponse> {
+  return postJson<VraPrescriptionResponse>("/agriculture/vra/prescription", request, token);
+}
+

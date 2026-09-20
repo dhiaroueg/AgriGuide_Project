@@ -412,42 +412,87 @@ function StatsPanel({ data }: { data: ReliefGrid }) {
 function SatelliteContext({ data, mode }: { data: ReliefGrid; mode: Mode }) {
   if (!data.satellite_available || mode === "slope" || mode === "photo") return null;
 
-  const mean =
+  const exactMeasurement =
     mode === "ndvi"
-      ? data.stats_ndvi.moyen
+      ? `NDVI moyen ${fmt(data.stats_ndvi.moyen)} (de ${fmt(data.stats_ndvi.min)} à ${fmt(data.stats_ndvi.max)}). ${data.stats_ndvi.vegetation_faible_pct ?? "—"}% des pixels valides sont sous 0,20.`
       : mode === "ndwi"
-        ? data.stats_ndvi.ndwi_moyen
-        : data.stats_ndvi.ndmi_moyen;
-  const interpretation =
+        ? `NDWI moyen ${fmt(data.stats_ndvi.ndwi_moyen)} (de ${fmt(data.stats_ndvi.ndwi_min)} à ${fmt(data.stats_ndvi.ndwi_max)}). ${data.stats_ndvi.signal_eau_libre_pct ?? "—"}% des pixels valides dépassent 0,15, seuil de signal d’eau libre.`
+        : `NDMI moyen ${fmt(data.stats_ndvi.ndmi_moyen)} (de ${fmt(data.stats_ndvi.ndmi_min)} à ${fmt(data.stats_ndvi.ndmi_max)}). ${data.stats_ndvi.humidite_vegetation_faible_pct ?? "—"}% des pixels valides sont négatifs.`;
+  const farmerSummary =
     mode === "ndvi"
-      ? mean === null
-        ? "Indice indisponible."
-        : mean < 0.2
-          ? "Couverture végétale faible : sol nu, culture récente ou végétation stressée sont possibles. Ce n’est pas une mesure de rendement."
-          : mean < 0.5
-            ? "Couverture végétale modérée. À comparer avec le stade de la culture et les observations de terrain."
-            : "Couverture végétale active. Ce résultat décrit la végétation visible, pas la santé d’une culture à lui seul."
+      ? `${data.stats_ndvi.vegetation_faible_pct ?? "—"}% de la parcelle présente un signal de végétation faible.`
       : mode === "ndwi"
-        ? mean === null
-          ? "Indice indisponible."
-          : mean > 0.15
-            ? "Signal compatible avec de l’eau libre. Vérifiez-le sur l’orthophoto ou directement sur le terrain avant toute décision."
-            : "Aucun signal net d’eau libre à l’échelle Sentinel-2. Le NDWI ne mesure ni l’humidité du sol ni les petites zones humides."
-        : mean === null
-          ? "Indice indisponible."
-          : mean < 0
-            ? "Humidité de végétation plutôt faible. Le NDMI ne mesure pas l’humidité du sol ; à croiser avec la météo et le stade de culture."
-            : "Signal d’humidité de végétation présent. À interpréter avec le stade de culture et les observations terrain.";
+        ? (data.stats_ndvi.signal_eau_libre_pct ?? 0) > 0
+          ? `Signal d’eau libre détecté sur ${data.stats_ndvi.signal_eau_libre_pct}% de la parcelle.`
+          : "Aucun signal d’eau libre détecté sur la parcelle."
+        : `${data.stats_ndvi.humidite_vegetation_faible_pct ?? "—"}% de la parcelle présente un signal de végétation peu humide.`;
+  const nextAction =
+    mode === "ndvi"
+      ? "À faire : allez d’abord dans les zones rouges/brunes et vérifiez le stade de culture, les dégâts ou les manques de levée."
+      : mode === "ndwi"
+        ? (data.stats_ndvi.signal_eau_libre_pct ?? 0) > 0
+          ? "À faire : vérifiez sur place les zones bleues : elles peuvent correspondre à de l’eau visible en surface (flaques, fossés ou zone inondée)."
+          : "Conclusion : aucune zone n’atteint le seuil d’eau libre. Les nuances bleutées éventuelles indiquent seulement les zones relativement moins sèches, pas de l’eau confirmée."
+        : "À faire : comparez les zones brunes avec l’irrigation récente et l’état réel des plantes.";
 
   return (
     <div className="rounded-lg border bg-sky-50/50 p-3 text-xs text-slate-700 dark:bg-sky-950/20 dark:text-slate-300">
-      <p className="font-semibold text-foreground">Comment utiliser cette couche</p>
-      <p className="mt-1 leading-relaxed">{interpretation}</p>
+      <p className="font-semibold text-foreground">Ce que la carte indique pour votre parcelle</p>
+      <p className="mt-1 font-medium leading-relaxed text-foreground">{farmerSummary}</p>
+      <p className="mt-1 leading-relaxed">{nextAction}</p>
+      <p className="mt-2 text-muted-foreground">Mesure exacte : {exactMeasurement}</p>
+      {mode === "ndwi" && (
+        <p className="mt-2 text-muted-foreground">
+          Le NDWI repère l’eau visible à la surface en comparant la lumière verte et l’infrarouge proche réfléchis par le sol et la végétation.
+          Il peut révéler une flaque, un fossé, un étang ou une inondation, mais ne mesure ni l’eau contenue dans le sol ni le besoin d’irrigation.
+        </p>
+      )}
       <p className="mt-2 text-muted-foreground">
-        Source : {data.source_satellite}. Période : {data.periode_recherche}. Résolution native :
-        {" "}{data.resolution_satellite_m} m (NDVI/NDWI), {data.resolution_ndmi_m} m (NDMI et masque qualité).
-        La grille 3D peut être plus fine, mais n’ajoute pas de détail satellite.
+        Fiabilité : {data.stats_ndvi.couverture_pct}% de la parcelle a une image exploitable. Données Sentinel-2 sur les {data.periode_recherche},
+        avec un détail de {data.resolution_satellite_m} m (NDVI/NDWI) et {data.resolution_ndmi_m} m (NDMI).
       </p>
+    </div>
+  );
+}
+
+function GeneralParcelConclusion({ data }: { data: ReliefGrid }) {
+  const waterSignal = data.stats_ndvi.signal_eau_libre_pct ?? 0;
+  const weakVegetation = data.stats_ndvi.vegetation_faible_pct ?? 0;
+  const lowVegetationMoisture = data.stats_ndvi.humidite_vegetation_faible_pct ?? 0;
+  const priorities = [
+    weakVegetation > 0
+      ? `Visiter d’abord les zones rouges/brunes du NDVI (${weakVegetation}% de signal végétal faible).`
+      : "Aucune zone de végétation faible n’est signalée par le NDVI.",
+    waterSignal > 0
+      ? `Contrôler les zones bleues du NDWI (${waterSignal}% avec signal d’eau libre).`
+      : "Aucune eau libre de surface n’est détectée par le NDWI.",
+    lowVegetationMoisture > 50
+      ? `Comparer les zones brunes du NDMI avec les apports d’eau récents (${lowVegetationMoisture}% avec signal peu humide).`
+      : "Le NDMI ne montre pas une majorité de végétation avec signal peu humide.",
+  ];
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+      <h3 className="text-sm font-semibold text-foreground">Bilan général de la parcelle</h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Relief IGN : pente moyenne {data.stats_pente.moyenne_pct.toFixed(1)}%, maximum {data.stats_pente.max_pct.toFixed(1)}%.
+        {data.satellite_available
+          ? ` Données Sentinel exploitables sur ${data.stats_ndvi.couverture_pct}% de la parcelle.`
+          : " Les indices satellite ne sont pas disponibles."}
+      </p>
+      {data.satellite_available && (
+        <>
+          <p className="mt-3 text-xs font-medium text-foreground">Priorités de contrôle sur le terrain</p>
+          <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-muted-foreground">
+            {priorities.map((priority) => (
+              <li key={priority}>• {priority}</li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Cette synthèse aide à décider où observer en premier ; elle ne remplace pas une vérification sur place avant une décision d’irrigation ou de traitement.
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -604,21 +649,24 @@ export function Terrain3DDialog({
                 <StatsPanel data={data} />
                 <SatelliteContext data={data} mode={mode} />
 
-                <div className="space-y-1.5 rounded-lg bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">
-                    Zones grises : données Sentinel-2 masquées (nuages, ombres, neige ou hors données)
-                    — aucune valeur n'est inventée.
-                  </p>
-                  {data.warnings.map((warning) => (
-                    <p
-                      key={warning}
-                      className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
-                    >
-                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                      {warning}
+                {/* Info */}
+                {data.warnings.length > 0 && (
+                  <div className="space-y-1.5 rounded-lg bg-muted/30 p-3">
+                    <p className="hidden">
+                      Zones grises : données Sentinel-2 masquées (nuages, ombres, neige ou hors données)
+                      — aucune valeur n'est inventée.
                     </p>
-                  ))}
-                </div>
+                    {data.warnings.map((warning) => (
+                      <p
+                        key={warning}
+                        className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+                      >
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>

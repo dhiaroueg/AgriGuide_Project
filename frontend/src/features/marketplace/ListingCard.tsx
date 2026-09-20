@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight, BadgeCheck, MapPin, Star, Truck } from "lucide-react";
 import type { Listing } from "@/features/marketplace/data";
 import { Badge } from "@/components/ui/badge";
 import { Reveal } from "@/components/motion/Reveal";
@@ -54,6 +54,11 @@ export function ListingCard({ l, index = 0 }: { l: Listing; index?: number }) {
             {l.title}
           </div>
           <div className="mt-0.5 text-sm text-muted-foreground">{l.quantity}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {l.seller.verified && <span className="inline-flex items-center gap-1 text-primary"><BadgeCheck className="h-3.5 w-3.5" />Vendeur vérifié</span>}
+            <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{l.seller.rating.toFixed(1)} ({l.seller.reviewCount})</span>
+            {l.deliveryModes.includes("livraison") && <Truck className="h-3.5 w-3.5" aria-label="Livraison disponible" />}
+          </div>
           <div
             className={cn(
               "mt-auto pt-3 inline-flex items-center gap-1 text-sm font-medium text-primary",

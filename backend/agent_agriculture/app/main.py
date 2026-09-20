@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.agriculture import router as agriculture_router
+from app.routers.diagnostic import router as diagnostic_router
 
 app = FastAPI(title="AgriAdvisor — Agent Agriculture", version="0.1.0")
 
@@ -16,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(agriculture_router)
+app.include_router(diagnostic_router)
 
 
 @app.get("/health")

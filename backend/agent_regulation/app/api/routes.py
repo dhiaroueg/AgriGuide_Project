@@ -34,7 +34,11 @@ def _get_agent() -> RegulationAgent:
 def chat(request: ChatRequest) -> ChatResponse:
     """Répond à une question de réglementation agricole via le RAG hybride."""
     try:
-        answer = _get_agent().answer(request.question)
+        answer = _get_agent().answer(
+            request.question,
+            history=request.history or None,
+            memories=request.memories or None,
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -51,8 +55,12 @@ def chat(request: ChatRequest) -> ChatResponse:
 def list_subsidies(limit: int = 4) -> SubsidyListResponse:
     """Aides financières actives, triées par échéance la plus proche (cache
     PostgreSQL — pas de recherche web à chaque appel, voir `subsidy_store_service`)."""
-    rows = subsidy_store_service.list_active_subsidies(limit=limit)
-    return SubsidyListResponse(subsidies=[Subsidy(**row) for row in rows])
+    try:
+        rows = subsidy_store_service.list_active_subsidies(limit=limit)
+        return SubsidyListResponse(subsidies=[Subsidy(**row) for row in rows])
+    except Exception:
+        # PostgreSQL indisponible en dev : retourne une liste vide plutôt qu'un 500.
+        return SubsidyListResponse(subsidies=[])
 
 
 @router.post("/subsidies/sync", response_model=SubsidySyncResult)

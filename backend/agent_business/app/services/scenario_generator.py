@@ -241,11 +241,14 @@ def generer_scenarios(request: BusinessAdvisorRequest) -> list[BusinessScenario]
             confidence_reasons.append("Rendement calculé depuis l'historique FAOSTAT.")
         else:
             confidence_reasons.append("Rendement issu du barème de référence.")
-        if "barème de référence (prix absolu)" in etude_marche.source:
-            confidence_score = min(confidence_score, 0.74)
+        if etude_marche.prix_fallback:
+            confidence_score = min(confidence_score, 0.45)
             confidence_reasons.append(
-                "Prix absolu issu du barème de référence; la tendance IPPAP est réelle mais n'est pas un prix RNM."
+                "Prix absolu indisponible : barème de secours utilisé. Ajoutez une cotation RNM/FranceAgriMer datée avant toute décision."
             )
+        elif etude_marche.prix_date:
+            confidence_score += 0.16
+            confidence_reasons.append(f"Prix issu d'une cotation datée du {etude_marche.prix_date}.")
         confidence_score = round(min(1.0, confidence_score), 2)
         confidence_level = (
             "high" if confidence_score >= 0.75 else "medium" if confidence_score >= 0.5 else "low"

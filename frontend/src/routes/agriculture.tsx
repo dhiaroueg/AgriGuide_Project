@@ -3,11 +3,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { Reveal } from "@/components/motion/Reveal";
+import { cn } from "@/lib/utils";
 import { MapPicker } from "@/components/MapPicker";
 import { TerrainMap3D } from "@/components/TerrainMap3D";
 import { AlertBanner } from "@/components/AlertBanner";
 import { ReportMarkdown } from "@/components/ReportMarkdown";
 import { AgricultureChatWidget } from "@/components/AgricultureChatWidget";
+import { PageTour } from "@/components/onboarding/PageTour";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
@@ -45,6 +47,7 @@ import {
   Eye,
   EyeOff,
   Box,
+  ArrowRight,
 } from "lucide-react";
 import { getCropVisual, scoreTone } from "@/lib/cropVisual";
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -67,6 +70,7 @@ import {
   resolveParcel,
   getNeighbors,
   getNdviHeatmap,
+  fetchSatelliteTimeline,
   analyzeParcel,
   buildChatContext,
   AgricultureApiError,
@@ -78,9 +82,14 @@ import {
   type NeighborCropContext,
   type CropRecommendationOut,
   type ParcelResolution,
+  type SatelliteIndexType,
+  type SatelliteTimelineResponse,
 } from "@/lib/agricultureApi";
 import { saveRealCropRecommendations, cultureLabel } from "@/lib/cropRecommendations";
 import { CropWasteValorization } from "@/components/CropWasteValorization";
+import { SatelliteTimelineControl } from "@/components/SatelliteTimelineControl";
+import { CarbonCreditDialog } from "@/components/CarbonCreditDialog";
+import { VraModulationDialog } from "@/components/VraModulationDialog";
 
 const Terrain3DDialog = lazy(() =>
   import("@/components/Terrain3DDialog").then((module) => ({ default: module.Terrain3DDialog })),
@@ -219,6 +228,8 @@ function Page() {
   } | null>(null);
   const [ndviLoading, setNdviLoading] = useState(false);
   const [ndviError, setNdviError] = useState<string | null>(null);
+  const [showCarbonDialog, setShowCarbonDialog] = useState(false);
+  const [showVraDialog, setShowVraDialog] = useState(false);
 
   useEffect(() => {
     if (!selectedTerrainId && terrains[0]) {
@@ -261,7 +272,8 @@ function Page() {
     mutationFn: analyzeParcel,
     onSuccess: (data) => {
       setShowReport(false);
-      if (data.terrain_id) saveRealCropRecommendations(data.terrain_id, data.crop_recommendations);
+      // Sauvegarde toujours les recommandations, même si terrain_id est null (mode SKIP_AUTH / exploration carte).
+      saveRealCropRecommendations(data.terrain_id ?? null, data.crop_recommendations);
     },
   });
 
@@ -376,26 +388,76 @@ function Page() {
     }
   }
 
+  const [showSatelliteTimeline, setShowSatelliteTimeline] = useState(false);
+  const [satelliteType, setSatelliteType] = useState<SatelliteIndexType>("ndvi");
+  const [satelliteMonthIndex, setSatelliteMonthIndex] = useState(11);
+  const [satelliteComparePrior, setSatelliteComparePrior] = useState(false);
+  const [satelliteData, setSatelliteData] = useState<SatelliteTimelineResponse | null>(null);
+  const [satelliteLoading, setSatelliteLoading] = useState(false);
+  const [satelliteError, setSatelliteError] = useState<string | null>(null);
 
-  async function handleToggleNdviHeatmap() {
-    if (!activePoint) return;
-    if (ndviOverlay) {
-      setNdviOverlay(null);
-      return;
+  async function loadSatelliteTimeline(
+    geom?: Record<string, unknown> | null,
+    type: SatelliteIndexType = satelliteType,
+    monthIdx: number = satelliteMonthIndex,
+    compare: boolean = satelliteComparePrior,
+  ) {
+    const targetGeom = geom ?? overlayGeometry;
+    let finalGeom = targetGeom;
+
+    if (!finalGeom && activePoint) {
+      const d = 0.002;
+      const [lat, lon] = activePoint;
+      finalGeom = {
+        type: "Polygon",
+        coordinates: [
+          [
+            [lon - d, lat - d],
+            [lon + d, lat - d],
+            [lon + d, lat + d],
+            [lon - d, lat + d],
+            [lon - d, lat - d],
+          ],
+        ],
+      };
     }
-    setNdviLoading(true);
-    setNdviError(null);
+
+    if (!finalGeom) return;
+
+    setSatelliteLoading(true);
+    setSatelliteError(null);
     try {
-      const result = await getNdviHeatmap({ point: { lat: activePoint[0], lon: activePoint[1] } });
-      if (!result.image_base64 || !result.bounds) {
-        setNdviError(result.warning ?? "Carte NDVI indisponible pour cette parcelle.");
-        return;
+      const targetDate = satelliteData?.timeline[monthIdx]?.date ?? null;
+      const res = await fetchSatelliteTimeline(
+        {
+          geometry: finalGeom,
+          index_type: type,
+          target_date: targetDate,
+          compare_year_prior: compare,
+        },
+        token,
+      );
+
+      setSatelliteData(res);
+      if (res.image_base64 && res.bounds) {
+        setNdviOverlay({ imageBase64: res.image_base64, bounds: res.bounds });
       }
-      setNdviOverlay({ imageBase64: result.image_base64, bounds: result.bounds });
     } catch (err) {
-      setNdviError(err instanceof AgricultureApiError ? err.message : "Erreur réseau lors du chargement de la carte NDVI.");
+      setSatelliteError(
+        err instanceof AgricultureApiError ? err.message : "Erreur lors du chargement satellite multi-temporel.",
+      );
     } finally {
-      setNdviLoading(false);
+      setSatelliteLoading(false);
+    }
+  }
+
+  function handleToggleSatelliteTimeline() {
+    if (showSatelliteTimeline) {
+      setShowSatelliteTimeline(false);
+      setNdviOverlay(null);
+    } else {
+      setShowSatelliteTimeline(true);
+      void loadSatelliteTimeline(overlayGeometry, satelliteType, satelliteMonthIndex, satelliteComparePrior);
     }
   }
 
@@ -418,7 +480,7 @@ function Page() {
               <SelectContent className="z-[1100]" position="popper">
                 {terrains.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.nom ?? "Terrain"} ({t.superficie_ha.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha)
+                    {t.nom ?? "Terrain"} ({typeof t.superficie_ha === "number" ? t.superficie_ha.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "0"} ha)
                   </SelectItem>
                 ))}
                 <SelectItem value={EXPLORE_VALUE}>Explorer sur la carte</SelectItem>
@@ -463,6 +525,7 @@ function Page() {
         )}
 
         {mapView === "2d" ? (
+          <div data-tour="agri-map">
           <MapPicker
           mode="point"
           onPoint={handleMapPoint}
@@ -476,33 +539,71 @@ function Page() {
         
             ndviOverlay={ndviOverlay}
           />
+          </div>
         ) : (
+          <div data-tour="agri-map">
           <TerrainMap3D center={mapCenter} overlayGeometry={overlayGeometry} height={440} />
+          </div>
         )}
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setMapView((v) => (v === "2d" ? "3d" : "2d"))}>
             <Box className="h-4 w-4 mr-1.5" />
             {mapView === "2d" ? "Vue 3D du terrain" : "Retour à la carte 2D"}
           </Button>
+
           {mapView === "2d" && activePoint && (
             <Button
-              variant="outline"
+              variant={showSatelliteTimeline ? "default" : "outline"}
               size="sm"
-              disabled={ndviLoading}
-              onClick={() => void handleToggleNdviHeatmap()}
-            >
-              {ndviLoading ? (
-                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-              ) : ndviOverlay ? (
-                <EyeOff className="h-4 w-4 mr-1.5" />
-              ) : (
-                <Eye className="h-4 w-4 mr-1.5" />
+              disabled={satelliteLoading}
+              onClick={handleToggleSatelliteTimeline}
+              className={cn(
+                "rounded-xl transition-all duration-300",
+                showSatelliteTimeline && "bg-primary text-primary-foreground shadow-sm"
               )}
-              {ndviOverlay ? "Masquer la carte NDVI" : "Afficher la carte NDVI"}
+            >
+              {satelliteLoading ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Satellite className="h-4 w-4 mr-1.5 text-emerald-400" />
+              )}
+              {showSatelliteTimeline
+                ? "Masquer l'imagerie satellite"
+                : "Analyse Satellite Multi-Temporelle & Stress Eau"}
             </Button>
           )}
-          {ndviError && <span className="text-xs text-destructive">{ndviError}</span>}
+
+          {satelliteError && <span className="text-xs text-destructive">{satelliteError}</span>}
         </div>
+
+        {/* Satellite Multi-Temporal Timeline & Health Index Control */}
+        {showSatelliteTimeline && (
+          <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <SatelliteTimelineControl
+              data={satelliteData}
+              isLoading={satelliteLoading}
+              activeType={satelliteType}
+              selectedMonthIndex={satelliteMonthIndex}
+              isComparePriorYear={satelliteComparePrior}
+              onTypeChange={(type) => {
+                setSatelliteType(type);
+                void loadSatelliteTimeline(overlayGeometry, type, satelliteMonthIndex, satelliteComparePrior);
+              }}
+              onMonthIndexChange={(idx) => {
+                setSatelliteMonthIndex(idx);
+                void loadSatelliteTimeline(overlayGeometry, satelliteType, idx, satelliteComparePrior);
+              }}
+              onCompareToggle={(compare) => {
+                setSatelliteComparePrior(compare);
+                void loadSatelliteTimeline(overlayGeometry, satelliteType, satelliteMonthIndex, compare);
+              }}
+              onClose={() => {
+                setShowSatelliteTimeline(false);
+                setNdviOverlay(null);
+              }}
+            />
+          </div>
+        )}
 
         {activePoint && (
           <div className="space-y-4">
@@ -567,7 +668,7 @@ function Page() {
                               : "",
                         );
                       }}
-                    >
+            >
                       <BookmarkPlus className="h-4 w-4 mr-2" />
                       Enregistrer comme mon terrain
                     </Button>
@@ -576,6 +677,7 @@ function Page() {
                     className="rounded-xl"
                     disabled={analyzeMutation.isPending}
                     onClick={handleAnalyze}
+                    data-tour="agri-analyze"
                   >
                     {analyzeMutation.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -674,12 +776,13 @@ function Page() {
           </div>
 
           {analysis.yield_estimate && (
-              <YieldCard
-                estimate={analysis.yield_estimate}
-                cropCode={analysis.crop_recommendations[0]?.culture ?? null}
-              />
-            )}
-            {analysis.agro_calc_top_crop && (
+            <YieldCard
+              estimate={analysis.yield_estimate}
+              cropCode={analysis.crop_recommendations[0]?.culture ?? null}
+            />
+          )}
+
+          {analysis.agro_calc_top_crop && (
             <div className="mt-6">
               <AgroCalcCard
                 estimate={analysis.agro_calc_top_crop}
@@ -687,6 +790,49 @@ function Page() {
               />
             </div>
           )}
+
+          {/* AgTech Carbon & VRA Precision Modules */}
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="p-5 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent flex flex-col justify-between space-y-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-wider">
+                  <Leaf className="w-4 h-4" />
+                  Bilan Carbone & Crédits Agricoles
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Stockage de Carbone du Sol</h3>
+                <p className="text-xs text-muted-foreground">
+                  Simulez la séquestration de CO₂ de votre sol selon vos pratiques (semis direct, couverts) et valorisez financièrement vos crédits carbone.
+                </p>
+              </div>
+              <Button
+                onClick={() => setShowCarbonDialog(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2 h-10 text-xs w-full sm:w-auto"
+              >
+                <Leaf className="w-4 h-4" />
+                Estimer les Crédits Carbone
+              </Button>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent flex flex-col justify-between space-y-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-wider">
+                  <Layers className="w-4 h-4" />
+                  Modulation d'Azote VRA (Agriculture de Précision)
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Cartes de Prescription Engrais</h3>
+                <p className="text-xs text-muted-foreground">
+                  Générez une carte d'épandage d'azote modulée par zones satellite NDVI pour économiser les intrants et exporter vers votre tracteur.
+                </p>
+              </div>
+              <Button
+                onClick={() => setShowVraDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2 h-10 text-xs w-full sm:w-auto"
+              >
+                <Layers className="w-4 h-4" />
+                Générer la Carte VRA
+              </Button>
+            </div>
+          </div>
 
           <div className="mt-10">
             <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
@@ -706,25 +852,48 @@ function Page() {
                     {showReport ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
                   </Button>
                 )}
-                {analysis.terrain_id && (
-                  <Button
-                    variant="outline"
-                    className="rounded-xl"
-                    onClick={() => navigate({ to: "/business" })}
-                  >
-                    <TrendingUp className="h-4 w-4 mr-2" /> Utiliser dans Conseiller Financier
-                  </Button>
-                )}
+                <Button
+                  className="rounded-xl gap-2"
+                  onClick={() => navigate({ to: "/business" })}
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Conseiller Financier
+                </Button>
               </div>
             </div>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {analysis.crop_recommendations.map((c) => (
                 <CropCard key={c.culture} crop={c} onDetails={() => setOpenCrop(c)} />
               ))}
             </div>
+
             <CropWasteValorization 
               cultures={analysis.crop_recommendations.map((c) => c.culture)}
             />
+
+            {/* CTA banner — redirige vers le Conseiller Financier */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Prêt pour l'étude financière ?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Vos {analysis.crop_recommendations.length} cultures recommandées sont prêtes à être simulées.
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="rounded-xl shrink-0 gap-2 h-11 px-6"
+                onClick={() => navigate({ to: "/business" })}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Aller au Conseiller Financier
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {showReport && analysis.report && (
@@ -764,6 +933,24 @@ function Page() {
               </div>
             </div>
           )}
+
+          {/* Carbon Credit Dialog */}
+          <CarbonCreditDialog
+            open={showCarbonDialog}
+            onOpenChange={setShowCarbonDialog}
+            areaHa={analysis.parcel.area_ha ?? 10}
+            clayPct={analysis.soil.clay_pct}
+            soilCarbonGKg={analysis.soil.organic_carbon_g_kg}
+          />
+
+          {/* VRA Fertilizer Modulation Dialog */}
+          <VraModulationDialog
+            open={showVraDialog}
+            onOpenChange={setShowVraDialog}
+            geometry={analysis.parcel.geometry ?? previewQuery.data?.geometry ?? { type: "Point", coordinates: [0, 0] }}
+            areaHa={analysis.parcel.area_ha ?? 10}
+            cropDeclared={analysis.parcel.crop_declared}
+          />
         </>
       )}
 
@@ -782,6 +969,7 @@ function Page() {
           )}
         </DialogContent>
       </Dialog>
+
       <Suspense fallback={null}>
         <Terrain3DDialog
           open={showRelief3d}
@@ -790,7 +978,9 @@ function Page() {
           label={selectedTerrain?.nom ?? previewQuery.data?.parcel_id}
         />
       </Suspense>
+
       <AgricultureChatWidget parcelContext={buildChatContext(analysis)} />
+      <PageTour tourId="agriculture" />
     </AppShell>
   );
 }
@@ -808,46 +998,37 @@ function SoilCard({ soil }: { soil: SoilData }) {
 
   const hasTexture = soil.clay_pct !== null || soil.sand_pct !== null || soil.silt_pct !== null;
 
+  const unavailable = rows.length === 0 && !hasTexture;
   return (
-    <div className="card-soft p-6">
-      <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-        <Layers className="h-4 w-4" />
-        Analyse du sol
+    <section className="border border-border bg-card p-5 md:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Layers className="h-4 w-4" /></span>
+          <div><p className="font-display text-lg font-bold tracking-tight">Sol</p><p className="text-xs text-muted-foreground">Propriétés cartographiées</p></div>
+        </div>
+        <span className={unavailable ? "text-xs font-semibold text-amber-700" : "text-xs font-semibold text-primary"}>{unavailable ? "À compléter" : "Disponible"}</span>
       </div>
-      {rows.length === 0 && !hasTexture ? (
-        <p className="mt-4 text-sm text-muted-foreground">{soil.warning ?? "Données de sol indisponibles pour cette parcelle."}</p>
+      {unavailable ? (
+        <div className="mt-5 border-l-2 border-amber-400 bg-amber-50 px-3 py-3">
+          <p className="text-sm font-semibold text-amber-950">Donnée de sol indisponible</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/75">{soil.warning ?? "Le service cartographique ne répond pas pour cette parcelle."}</p>
+          <p className="mt-2 text-xs font-medium text-amber-900">À faire: utilisez un prélèvement de sol avant de valider la fertilisation.</p>
+        </div>
       ) : (
-        <div className="mt-4 space-y-2.5 text-sm">
-          {hasTexture && (
-            <div className="border-b border-border pb-2.5">
-              <span className="text-muted-foreground">Texture</span>
-              <div className="mt-1.5 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Argile</span>
-                  <span className="font-medium">{fmtPct(soil.clay_pct)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Sable</span>
-                  <span className="font-medium">{fmtPct(soil.sand_pct)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Limon</span>
-                  <span className="font-medium">{fmtPct(soil.silt_pct)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          {rows.map((r) => (
-            <div key={r.label} className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-none">
-              <span className="text-muted-foreground">{r.label}</span>
-              <span className="font-medium text-right">{r.value}</span>
-            </div>
-          ))}
+        <div className="mt-5">
+          {hasTexture && <div className="grid grid-cols-3 gap-2 border-b border-border pb-4 text-center text-xs"><SoilSlice label="Argile" value={fmtPct(soil.clay_pct)} /><SoilSlice label="Sable" value={fmtPct(soil.sand_pct)} /><SoilSlice label="Limon" value={fmtPct(soil.silt_pct)} /></div>}
+          <div className="mt-4 grid gap-x-5 gap-y-3 sm:grid-cols-2 text-sm">
+            {rows.map((r) => <div key={r.label} className="flex items-start justify-between gap-3 border-b border-border/70 pb-2"><span className="text-muted-foreground">{r.label}</span><span className="font-semibold text-right">{r.value}</span></div>)}
+          </div>
         </div>
       )}
-      <div className="mt-3 text-[11px] text-muted-foreground">Source : {soil.source === "soilgrids" ? "SoilGrids (ISRIC)" : soil.source}</div>
-    </div>
+      <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">Source: {soil.source === "soilgrids" ? "SoilGrids (ISRIC), donnée cartographiée" : "indisponible"}. Ce n’est pas une analyse de laboratoire.</p>
+    </section>
   );
+}
+
+function SoilSlice({ label, value }: { label: string; value: string }) {
+  return <div><p className="font-display text-lg font-bold text-foreground">{value}</p><p className="mt-0.5 text-muted-foreground">{label}</p></div>;
 }
 
 function NdviCard({ vegetation }: { vegetation: VegetationData }) {
@@ -857,44 +1038,15 @@ function NdviCard({ vegetation }: { vegetation: VegetationData }) {
   const label = ndvi < 0.2 ? "Sol nu / végétation clairsemée" : ndvi < 0.5 ? "Végétation modérée" : "Végétation dense et active";
 
   return (
-    <div className="card-soft p-6">
-      <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-        <Satellite className="h-4 w-4" />
-        Image satellite (NDVI)
-      </div>
-      {unavailable ? (
-        <p className="mt-4 text-sm text-muted-foreground">{vegetation.warning ?? "Donnée satellite indisponible pour cette parcelle."}</p>
-      ) : (
-        <>
-          <div
-            className="mt-5 aspect-square rounded-2xl relative overflow-hidden"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 30% 40%, oklch(0.72 0.18 140), transparent 55%), radial-gradient(circle at 70% 70%, oklch(0.55 0.16 140), transparent 55%), linear-gradient(135deg, oklch(0.8 0.12 130), oklch(0.58 0.16 140))",
-            }}
-          >
-            <div className="absolute bottom-3 left-3 rounded-full bg-card/90 px-3 py-1 text-xs font-semibold">
-              {label} - NDVI {ndvi.toFixed(2)}
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-            <span>Faible</span>
-            <div className="flex-1 h-2 rounded-full relative" style={{ background: "linear-gradient(to right, oklch(0.75 0.15 30), oklch(0.8 0.15 80), oklch(0.6 0.16 140))" }}>
-              <div
-                className="absolute top-1/2 h-3 w-3 rounded-full bg-card border-2 border-foreground"
-                style={{ left: `${pct}%`, transform: "translate(-50%, -50%)" }}
-              />
-            </div>
-            <span>Forte</span>
-          </div>
-          {vegetation.observation_window_days !== null && (
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              Fenêtre d'observation : {vegetation.observation_window_days} jours ({vegetation.valid_pixel_count ?? 0} pixels valides) - Sentinel-2.
-            </p>
-          )}
-        </>
-      )}
-    </div>
+    <section className="border border-border bg-card p-5 md:p-6">
+      <div className="flex items-center gap-2"><span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-sky/15 text-sky"><Satellite className="h-4 w-4" /></span><div><p className="font-display text-lg font-bold tracking-tight">Végétation observée</p><p className="text-xs text-muted-foreground">Imagerie Sentinel-2 · NDVI</p></div></div>
+      {unavailable ? <p className="mt-5 text-sm text-muted-foreground">{vegetation.warning ?? "Donnée satellite indisponible pour cette parcelle."}</p> : <>
+        <div className="mt-6 flex items-end justify-between gap-4"><div><p className="font-display text-5xl font-bold tracking-tight text-primary">{ndvi.toFixed(2)}</p><p className="mt-1 text-sm font-semibold">{label}</p></div><p className="max-w-28 text-right text-xs leading-relaxed text-muted-foreground">Indice de vigueur, pas un rendement.</p></div>
+        <div className="mt-5 h-2 overflow-hidden bg-secondary"><div className="h-full bg-primary" style={{ width: `${pct}%` }} /></div>
+        <div className="mt-2 flex justify-between text-[11px] text-muted-foreground"><span>Végétation faible</span><span>Végétation dense</span></div>
+        {vegetation.observation_window_days !== null && <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">Observation sur {vegetation.observation_window_days} jours · {vegetation.valid_pixel_count ?? 0} pixels valides.</p>}
+      </>}
+    </section>
   );
 }
 
@@ -1051,35 +1203,20 @@ function SummaryCard({ analysis }: { analysis: AnalyzeResponse }) {
 
 function AgroCalcCard({ estimate, cropCode }: { estimate: AgroCalcEstimate; cropCode: string | null }) {
   return (
-    <div className="card-soft p-6">
-      <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-        <FlaskConical className="h-4 w-4" />
-        Fertilisation & irrigation - {displayCrop(cropCode)}
+    <section className="mt-6 border-y border-border/70 py-6 md:py-8">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Repères de campagne</p><h2 className="mt-1 font-display text-2xl font-bold tracking-tight">Fertilisation et irrigation · {displayCrop(cropCode)}</h2></div><p className="max-w-sm text-sm text-muted-foreground">Des repères à ajuster avec les observations de la parcelle.</p></div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <AgroMetric icon={FlaskConical} label="Azote à prévoir" value={estimate.n_dose_kg_ha !== null ? `${formatValue(estimate.n_dose_kg_ha)} kg N/ha` : "Non disponible"} note="À confirmer avec un reliquat azoté et l’historique de la parcelle." />
+        <AgroMetric icon={Droplets} label="Eau à surveiller" value={estimate.irrigation_need_mm !== null ? `${formatValue(estimate.irrigation_need_mm)} mm` : "Non disponible"} note={estimate.irrigation_window_days ? `Sur les ${estimate.irrigation_window_days} prochains jours.` : "Fenêtre de prévision non disponible."} />
       </div>
-      <div className="mt-5 grid sm:grid-cols-2 gap-4">
-        <Row
-          icon={FlaskConical}
-          label="Dose d'azote conseillée"
-          value={estimate.n_dose_kg_ha !== null ? `${formatValue(estimate.n_dose_kg_ha)} kg N/ha` : "N/A"}
-        />
-        <Row
-          icon={Droplets}
-          label="Besoin en irrigation"
-          value={
-            estimate.irrigation_need_mm !== null
-              ? `${formatValue(estimate.irrigation_need_mm)} mm sur ${estimate.irrigation_window_days ?? "?"} j`
-              : "N/A"
-          }
-        />
-      </div>
-      {(estimate.n_method_note || estimate.irrigation_method_note) && (
-        <p className="mt-4 text-xs text-muted-foreground">
-          {estimate.n_method_note} {estimate.irrigation_method_note}
-        </p>
-      )}
-      {estimate.warning && <p className="mt-2 text-xs text-waste-foreground">{estimate.warning}</p>}
-    </div>
+      {(estimate.n_method_note || estimate.irrigation_method_note) && <details className="mt-5 border-t border-border pt-4"><summary className="cursor-pointer text-sm font-semibold text-muted-foreground">Comprendre le calcul et ses limites</summary><p className="mt-3 max-w-4xl text-xs leading-relaxed text-muted-foreground">{estimate.n_method_note} {estimate.irrigation_method_note}</p></details>}
+      {estimate.warning && <p className="mt-3 border-l-2 border-amber-400 pl-3 text-xs leading-relaxed text-amber-800">{estimate.warning}</p>}
+    </section>
   );
+}
+
+function AgroMetric({ icon: Icon, label, value, note }: { icon: typeof Droplets; label: string; value: string; note: string }) {
+  return <div className="border border-border bg-card p-5"><Icon className="h-5 w-5 text-primary" /><p className="mt-4 text-sm text-muted-foreground">{label}</p><p className="mt-1 font-display text-3xl font-bold tracking-tight">{value}</p><p className="mt-3 text-xs leading-relaxed text-muted-foreground">{note}</p></div>;
 }
 
 function CropCard({ crop, onDetails }: { crop: CropRecommendationOut; onDetails: () => void }) {
@@ -1176,24 +1313,11 @@ function Row({ icon: Icon, label, value }: { icon: typeof Droplets; label: strin
 
 function YieldCard({ estimate, cropCode }: { estimate: YieldEstimate; cropCode: string | null }) {
   return (
-    <div className="card-soft p-6">
-      <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-        <TrendingUp className="h-4 w-4" />
-        Rendement estimé — {displayCrop(cropCode)}
-      </div>
-      <div className="mt-5">
-        <Row
-          icon={TrendingUp}
-          label="Rendement estimé"
-          value={
-            estimate.yield_estimate_q_ha !== null
-              ? `${formatValue(estimate.yield_estimate_q_ha)} q/ha (${formatValue(estimate.yield_range_low_q_ha)} - ${formatValue(estimate.yield_range_high_q_ha)} q/ha)`
-              : "N/A"
-          }
-        />
-      </div>
-      {estimate.method_note && <p className="mt-4 text-xs text-muted-foreground">{estimate.method_note}</p>}
-      {estimate.warning && <p className="mt-2 text-xs text-waste-foreground">{estimate.warning}</p>}
-    </div>
+    <section className="mt-6 grid gap-5 border-y border-border/70 py-6 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] md:py-8">
+      <div><p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Projection indicative</p><h2 className="mt-1 font-display text-2xl font-bold tracking-tight">Rendement · {displayCrop(cropCode)}</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Un ordre de grandeur pour comparer les cultures, pas une promesse de récolte.</p></div>
+      <div className="border-l-2 border-primary pl-5"><p className="text-sm text-muted-foreground">Rendement central estimé</p><p className="mt-1 font-display text-4xl font-bold tracking-tight text-primary">{estimate.yield_estimate_q_ha !== null ? `${formatValue(estimate.yield_estimate_q_ha)} q/ha` : "Non disponible"}</p>{estimate.yield_range_low_q_ha !== null && estimate.yield_range_high_q_ha !== null && <p className="mt-2 text-sm text-muted-foreground">Fourchette de travail: {formatValue(estimate.yield_range_low_q_ha)} à {formatValue(estimate.yield_range_high_q_ha)} q/ha</p>}</div>
+      {estimate.method_note && <details className="md:col-span-2 border-t border-border pt-4"><summary className="cursor-pointer text-sm font-semibold text-muted-foreground">Origine de cette estimation</summary><p className="mt-3 text-xs leading-relaxed text-muted-foreground">{estimate.method_note}</p></details>}
+      {estimate.warning && <p className="md:col-span-2 border-l-2 border-amber-400 pl-3 text-xs text-amber-800">{estimate.warning}</p>}
+    </section>
   );
 }

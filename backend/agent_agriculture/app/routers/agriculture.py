@@ -27,12 +27,19 @@ from app.models.schemas import (
     NdviHeatmapResponse,
     ChatRequest,
     ChatResponse,
+    SatelliteTimelineRequest,
+    SatelliteTimelineResponse,
+    CarbonCalculationRequest,
+    CarbonCalculationResponse,
+    VraPrescriptionRequest,
+    VraPrescriptionResponse,
 )
 from app.services import (
     parcel_service,
     soil_service,
     weather_service,
     satellite_service,
+    satellite_timeline_service,
     ml_service,
     agro_calc_service,
     yield_service,
@@ -42,6 +49,8 @@ from app.services import (
     persistence_service,
     relief3d_service,
     chatbot_service,
+    carbon_service,
+    vra_service,
 )
 from app.security import get_optional_user_id
 
@@ -115,12 +124,7 @@ async def get_neighbors(req: ParcelRequest, radius_m: float = 800):
 
 @router.post("/parcel/ndvi_heatmap", response_model=NdviHeatmapResponse)
 async def ndvi_heatmap(req: ParcelRequest):
-    """
-    Backs the map frontend's "Afficher la carte NDVI" toggle. Ported
-    from the standalone prototype, where this exact button called this
-    exact route but nothing on the server handled it (every click
-    404'd) until it was added there first.
-    """
+    """Backs the map frontend's legacy NDVI heatmap toggle."""
     parcel = await parcel_service.resolve_parcel(req)
     if not parcel.resolved or not parcel.geometry:
         raise HTTPException(
@@ -133,6 +137,21 @@ async def ndvi_heatmap(req: ParcelRequest):
     return NdviHeatmapResponse(**result)
 
 
+@router.post("/parcel/satellite_timeline", response_model=SatelliteTimelineResponse)
+async def get_satellite_timeline(req: SatelliteTimelineRequest):
+    """
+    Multi-temporal Sentinel-2 satellite analysis: NDVI (biomass),
+    NDWI (water stress), RGB (true color), 12-month temporal timeline,
+    and year-over-year (N vs N-1) comparison.
+    """
+    if not req.geometry or "type" not in req.geometry:
+        raise HTTPException(status_code=400, detail="Géométrie GeoJSON de parcelle manquante ou invalide.")
+    try:
+        return await asyncio.to_thread(satellite_timeline_service.build_satellite_timeline, req)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Analyse satellite multi-temporelle indisponible : {exc}") from exc
+
+
 def _besoins_for_crop(
     crop: str,
     soil: SoilData,
@@ -140,9 +159,7 @@ def _besoins_for_crop(
     yield_objective_q_ha: float | None,
     dl_observation: DLCropObservation | None = None,
 ):
-    """Runs the agro-calc formulas for one candidate crop (not just the
-    top-ranked one) so every entry in the top-5 list carries real
-    fertilizer/irrigation numbers, not just the winner."""
+    """Runs the agro-calc formulas for one candidate crop so every entry in the top-5 list carries real fertilizer/irrigation numbers."""
     estimate = agro_calc_service.estimate_fertilizer_and_irrigation(
         crop, soil, weather, yield_objective_q_ha, dl_observation
     )
@@ -167,8 +184,7 @@ def _besoins_for_crop(
     besoins_pesticides = {
         "warning": (
             "Non calculé — nécessite un module BSV (Bulletin de Santé du Végétal) croisant "
-            "les données climatiques régionales avec les risques phytosanitaires connus "
-            "(voir backend/agent_agriculture/README.md, section \u00ab À ajouter \u00bb)."
+            "les données climatiques régionales avec les risques phytosanitaires connus."
         )
     }
     return estimate, besoins_irrigation, besoins_engrais, besoins_pesticides
@@ -178,10 +194,6 @@ def _besoins_for_crop(
 async def analyze(req: AnalyzeRequest):
     warnings: list[str] = []
 
-    # 1. Resolve the parcel geometry to analyze — either the farmer's own
-    #    saved terrain (authoritative boundary + area from `terrains`,
-    #    enriched with a cadastre/RPG lookup at its centroid), or a fresh
-    #    point clicked on the map (resolved live against cadastre/RPG).
     terrain_row = None
     if req.terrain_id:
         try:
@@ -198,10 +210,6 @@ async def analyze(req: AnalyzeRequest):
             raise HTTPException(status_code=404, detail="Terrain introuvable.")
         centroid = Coordinate(lat=terrain_row["centroid_lat"], lon=terrain_row["centroid_lon"])
         parcel = await parcel_service.resolve_parcel(ParcelRequest(point=centroid))
-        # The terrain's own hand-drawn boundary is the authoritative one for
-        # this farmer's field — a cadastre lookup at the centroid can land on
-        # a neighboring cadastral unit, so it's only used to enrich (crop
-        # déclaré, statut agricole), never to override the geometry/area.
         parcel.geometry = terrain_row["geometry"]
         parcel.area_ha = terrain_row["superficie_ha"]
         parcel.centroid = centroid
@@ -216,18 +224,6 @@ async def analyze(req: AnalyzeRequest):
                 detail=parcel.warning or "Impossible de résoudre une parcelle à cet endroit.",
             )
 
-    # 2. Parallel data fetch. Satellite NDVI and the DL classifier both need
-    #    the actual polygon (not just centroid), so they only run if we have
-    #    geometry — fall back gracefully otherwise, same pattern for both.
-    #
-    #    return_exceptions=True: soil_service/weather_service already catch
-    #    their own httpx errors internally and always return a valid
-    #    (possibly "unavailable") object, but satellite_service.get_ndvi()
-    #    and dl_service.predict_crop() don't have that same internal guard
-    #    against *unexpected* exceptions. Without this, one bad response
-    #    from either would take down the entire request — including data
-    #    that already succeeded — contradicting this project's own
-    #    "degrade gracefully" principle.
     results = await asyncio.gather(
         soil_service.get_soil_data(parcel.centroid),
         weather_service.get_weather_data(parcel.centroid),
@@ -239,27 +235,24 @@ async def analyze(req: AnalyzeRequest):
     soil, weather, vegetation, dl_observation, neighbors = results
 
     if isinstance(soil, Exception):
-        soil = SoilData(source="unavailable", warning=f"Erreur inattendue lors de la récupération des données de sol : {soil}")
+        soil = SoilData(
+            source="unavailable",
+            warning="Données cartographiques de sol temporairement indisponibles.",
+        )
     if isinstance(weather, Exception):
-        weather = WeatherData(source="unavailable", warning=f"Erreur inattendue lors de la récupération des données météo : {weather}")
+        weather = WeatherData(source="unavailable", warning=f"Erreur données météo : {weather}")
     if vegetation is None:
-        vegetation = VegetationData(source="unavailable", warning="Aucune géométrie de parcelle disponible pour la donnée satellite.")
+        vegetation = VegetationData(source="unavailable", warning="Aucune géométrie de parcelle disponible.")
     elif isinstance(vegetation, Exception):
-        vegetation = VegetationData(source="unavailable", warning=f"Erreur inattendue NDVI : {vegetation}")
+        vegetation = VegetationData(source="unavailable", warning=f"Erreur NDVI : {vegetation}")
     if dl_observation is None:
-        dl_observation = DLCropObservation(source="unavailable", warning="Aucune géométrie de parcelle disponible pour la classification satellite.")
+        dl_observation = DLCropObservation(source="unavailable", warning="Aucune géométrie disponible pour classification DL.")
     elif isinstance(dl_observation, Exception):
-        dl_observation = DLCropObservation(source="unavailable", warning=f"Erreur inattendue classification DL : {dl_observation}")
+        dl_observation = DLCropObservation(source="unavailable", warning=f"Erreur classification DL : {dl_observation}")
     if isinstance(neighbors, Exception):
-        warnings.append(f"Contexte des parcelles voisines indisponible : {neighbors}")
+        warnings.append(f"Contexte parcelles voisines indisponible : {neighbors}")
         neighbors = None
 
-    # 3. Rule-based 9-crop scoring + real fertilizer/irrigation numbers for
-    #    the top 5. Full pool is scored in ml_service; only top 5 are displayed.
-    #    dl_observation feeds both steps in a small, capped, transparent way
-    #    (see ml_service._dl_evidence_bonus and
-    #    agro_calc_service._dl_prairie_n_credit) and degrades to today's
-    #    behavior whenever the classifier is unavailable/unsure.
     _MAX_DISPLAYED_CROPS = 5
     crop_recs = ml_service.recommend_crops(soil, weather, dl_observation)[:_MAX_DISPLAYED_CROPS]
     crop_recommendations_out: list[CropRecommendationOut] = []
@@ -288,10 +281,6 @@ async def analyze(req: AnalyzeRequest):
         )
     top_crop = crop_recs[0].crop if crop_recs else None
 
-    # 4. RAG retrieval + two-stage Mistral synthesis — best-effort. Missing
-    #    MISTRAL_API_KEY or an empty corpus must not fail the whole
-    #    analysis: the real data above (soil/weather/satellite/crops/agro
-    #    calc) is still useful and returned regardless.
     report = None
     try:
         chunks = await asyncio.to_thread(
@@ -309,11 +298,9 @@ async def analyze(req: AnalyzeRequest):
             parcel, soil, weather, crop_recs, chunks, vegetation, dl_observation, top_crop_agro, top_crop_yield
         )
         report = await synthesis_service.generate_report(synthesis, parcel)
-    except Exception as e:  # noqa: BLE001 — genuinely want to degrade gracefully here (missing key, empty corpus, network issue, ...)
-        warnings.append(f"Rapport IA non généré (RAG/LLM indisponible) : {e}")
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"Rapport IA non généré : {e}")
 
-    # 5. Persist against the terrain, if the caller gave us one — matches
-    #    `database/schema.sql`'s land_profiles/crop_recommendations tables.
     land_profile_id = None
     persisted = False
     if req.terrain_id:
@@ -336,8 +323,8 @@ async def analyze(req: AnalyzeRequest):
             )
             persistence_service.save_crop_recommendations(land_profile_id, crop_recommendations_out)
             persisted = True
-        except Exception as e:  # noqa: BLE001 — a DB hiccup shouldn't discard an otherwise-successful analysis
-            warnings.append(f"Résultats non persistés en base (erreur DB) : {e}")
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"Résultats non persistés en base : {e}")
 
     weather_stats = synthesis_service.compute_weather_stats(weather)
 
@@ -358,3 +345,22 @@ async def analyze(req: AnalyzeRequest):
         report=report,
         warnings=warnings,
     )
+
+
+@router.post("/carbon/estimate", response_model=CarbonCalculationResponse)
+async def estimate_carbon_credits(req: CarbonCalculationRequest):
+    """Estimate agricultural soil carbon sequestration (tCO2e/yr) and carbon credit revenue potential."""
+    try:
+        return carbon_service.calculate_carbon_credits(req)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Erreur calcul Bilan Carbone : {exc}") from exc
+
+
+@router.post("/vra/prescription", response_model=VraPrescriptionResponse)
+async def generate_vra_prescription(req: VraPrescriptionRequest):
+    """Generate precision nitrogen VRA modulation zones and ISOBUS/CSV export prescription files."""
+    try:
+        return vra_service.generate_vra_prescription(req)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Erreur génération carte de modulation VRA : {exc}") from exc
+

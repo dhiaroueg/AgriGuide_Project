@@ -26,8 +26,8 @@ export function loadTerrain(): LatLng[] {
  * Compute the area of a polygon on the Earth's surface using the spherical excess formula.
  * Returns square meters.
  */
-export function polygonAreaM2(points: LatLng[]): number {
-  if (points.length < 3) return 0;
+export function polygonAreaM2(points?: LatLng[] | null): number {
+  if (!points || points.length < 3) return 0;
   const R = 6378137; // Earth radius in meters
   const toRad = (d: number) => (d * Math.PI) / 180;
   let total = 0;
@@ -41,12 +41,13 @@ export function polygonAreaM2(points: LatLng[]): number {
   return Math.abs((total * R * R) / 2);
 }
 
-export function areaHectares(points: LatLng[]): number {
+export function areaHectares(points?: LatLng[] | null): number {
+  if (!points) return 0;
   return polygonAreaM2(points) / 10000;
 }
 
-export function centroid(points: LatLng[]): LatLng | null {
-  if (!points.length) return null;
+export function centroid(points?: LatLng[] | null): LatLng | null {
+  if (!points || !points.length) return null;
   const sum = points.reduce(
     (acc, [lat, lon]) => [acc[0] + lat, acc[1] + lon] as LatLng,
     [0, 0] as LatLng,

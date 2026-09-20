@@ -44,6 +44,13 @@ def fetch_weather_summary(
     params = {
         "latitude": latitude,
         "longitude": longitude,
+        "current": [
+            "temperature_2m",
+            "relative_humidity_2m",
+            "precipitation",
+            "weather_code",
+            "wind_speed_10m",
+        ],
         "daily": [
             "temperature_2m_max",
             "temperature_2m_min",
@@ -52,7 +59,10 @@ def fetch_weather_summary(
             "wind_speed_10m_max",
             "weather_code",
         ],
+        "forecast_days": 1,
         "timezone": "auto",
+        "wind_speed_unit": "kmh",
+        "temperature_unit": "celsius",
     }
     try:
         response = requests.get(settings.open_meteo_base, params=params, timeout=10)
@@ -61,15 +71,21 @@ def fetch_weather_summary(
                 location_label=location_label,
                 note=f"Open-Meteo indisponible (HTTP {response.status_code}).",
             )
-        daily = response.json().get("daily", {})
-        weather_code = (daily.get("weather_code") or [None])[0]
+        payload = response.json()
+        current = payload.get("current") or {}
+        daily = payload.get("daily") or {}
+        weather_code = current.get("weather_code")
+        if weather_code is None:
+            weather_code = (daily.get("weather_code") or [None])[0]
         return WeatherSummary(
             location_label=location_label,
             today_max_temp_c=(daily.get("temperature_2m_max") or [None])[0],
             today_min_temp_c=(daily.get("temperature_2m_min") or [None])[0],
+            current_temp_c=current.get("temperature_2m"),
             precipitation_sum_mm=(daily.get("precipitation_sum") or [None])[0],
             precipitation_probability_pct=(daily.get("precipitation_probability_max") or [None])[0],
-            max_wind_speed_kmh=(daily.get("wind_speed_10m_max") or [None])[0],
+            max_wind_speed_kmh=current.get("wind_speed_10m")
+            or (daily.get("wind_speed_10m_max") or [None])[0],
             conditions_label=_conditions_label(weather_code),
         )
     except Exception as exc:  # noqa: BLE001

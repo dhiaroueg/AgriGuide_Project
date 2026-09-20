@@ -10,10 +10,14 @@ exhaustivement).
 from functools import lru_cache
 from urllib.parse import urlparse
 
-from tavily import TavilyClient
-
 from app.config.settings import get_settings
 from app.schemas.web_search import WebSearchResponse, WebSearchResult
+
+# NOTE: TavilyClient is intentionally NOT imported at module level.
+# tavily → tiktoken → _tiktoken.pyd, which may be blocked by Windows
+# Application Control policies. The client is imported lazily inside
+# get_web_search_client() so the DLL is only touched when the feature
+# is actually used (requires WEB_SEARCH_API_KEY to be set).
 
 OFFICIAL_DOMAINS = [
     "agriculture.gouv.fr",
@@ -31,8 +35,9 @@ TOTAL_MAX_RESULTS = 5
 
 
 @lru_cache
-def get_web_search_client() -> TavilyClient:
+def get_web_search_client():
     """Retourne un client Tavily (mis en cache) pour effectuer les recherches web."""
+    from tavily import TavilyClient  # lazy import — avoids loading tiktoken DLL at startup
     settings = get_settings()
     return TavilyClient(api_key=settings.web_search_api_key)
 

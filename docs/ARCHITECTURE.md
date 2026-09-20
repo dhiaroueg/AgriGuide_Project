@@ -59,15 +59,6 @@ non des lignes dans les tables en amont.
 - Le frontend enrichit le top 5 cultures avec l'**agent Déchets**
   (`waste_agents`, port 8004) : résidus produits et voies de valorisation.
 
-### Agent Déchets / Valorisation (waste_agents/)
-- Base de connaissances scientifique (crop → wastes → transformations →
-  applications), exposée en lecture seule via `POST /waste/for-crops` et
-  `GET /waste/marketplace-suggestions`.
-- Branché après les recommandations Agriculture et après confirmation
-  Business → préremplit les annonces `dechet` sur la marketplace.
-- La recherche autonome (web + papers) reste dans le Streamlit interne ;
-  le parcours farmer n'exige pas de clé LLM.
-
 ### Agent Business (agent_business/)
 - Le score de matching est une **formule explicite**, pas une estimation LLM :
   `score = w1*profit_normalise + w2*(1 - risque_normalise) + w3*fit_budget`
@@ -78,6 +69,15 @@ non des lignes dans les tables en amont.
 - Écrit dans `business_scenarios`, puis `farmer_decisions` +
   `decision_allocations` une fois la décision confirmée (human-in-the-loop).
 
+### Agent Déchets / Valorisation (waste_agents/)
+- Base de connaissances scientifique (crop → wastes → transformations →
+  applications), exposée en lecture seule via `POST /waste/for-crops` et
+  `GET /waste/marketplace-suggestions`.
+- Branché après les recommandations Agriculture et après confirmation
+  Business → préremplit les annonces `dechet` sur la marketplace.
+- La recherche autonome (web + papers) reste dans le Streamlit interne ;
+  le parcours farmer n'exige pas de clé LLM.
+
 ### Agent Monitoring (agent_monitoring/)
 - Tâches Celery Beat quotidiennes :
   - Suivi météo/irrigation par culture active → `alerts`.
@@ -87,20 +87,9 @@ non des lignes dans les tables en amont.
   - Rappels d'échéances administratives.
 - Envoie les notifications via le canal préféré (`notification_preferences`).
 
-### Module Marketplace (marketplace/)
-- CRUD classique, pas un agent : `annonces`, `dechets_reference`.
-- Seule la génération de la description d'utilité (pour les déchets) et la
-  suggestion de prix (pour les récoltes, via la même source RNM que Business)
-  passent par un appel LLM ponctuel — déclenché par l'agent Monitoring.
-
-### Module Auth (auth/)
-- CRUD classique, pas un agent — premier module réellement connecté à
-  PostgreSQL (les autres utilisent encore des mocks, voir team_guide.md).
-- Gère `users.role` (`farmer` | `acheteur`), `farmer_equipements` et les
-  `terrains` déclarés au sign up (modifiables ensuite depuis le profil).
-- Un `acheteur` n'a accès qu'en lecture au Module Marketplace (pas de dépôt
-  d'annonce) ; un `farmer` a accès à tous les agents + écriture marketplace.
-- Sécurité : mots de passe hachés (bcrypt), session par JWT.
+### Module Marketplace & Auth (marketplace/ & auth/)
+- **Marketplace** : CRUD classique (`annonces`, `dechets_reference`), suggestions de valorisation et de prix.
+- **Auth** : Authentification JWT, gestion `users.role` (`farmer` | `acheteur`), profil, équipements et `terrains`.
 
 ## 4. Sources de données externes (par agent)
 
@@ -109,6 +98,7 @@ non des lignes dans les tables en amont.
 | Régulation | Code Rural, Cerfa, SRDEA, data.gouv.fr, FranceAgriMer (aides) |
 | Agriculture | Sentinel-2, SoilGrids, NASA POWER, Open-Meteo, Open-Elevation, RPG, BSV |
 | Business | RNM / FranceAgriMer (prix de marché) |
+| Déchets | Base scientifique valorisation, ADEME |
 | Monitoring | Open-Meteo (prévisions), BSV régional |
 
 ## 5. Stack technique

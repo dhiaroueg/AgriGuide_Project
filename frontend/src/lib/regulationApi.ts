@@ -17,8 +17,15 @@ const REGULATION_API_BASE_URL: string =
 // Entrée/sortie — reflète ChatRequest / ChatResponse
 // ---------------------------------------------------------------------------
 
+export type ChatHistoryMessage = {
+  role: "user" | "bot";
+  text: string;
+};
+
 export type ChatRequest = {
   question: string;
+  history?: ChatHistoryMessage[];
+  memories?: string[];
 };
 
 export type ChatResponse = {

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     )
 
     mistral_api_key: str
+    mistral_model: str = "open-mistral-7b"
     qdrant_url: str
     qdrant_api_key: str = ""
     qdrant_collection_name: str

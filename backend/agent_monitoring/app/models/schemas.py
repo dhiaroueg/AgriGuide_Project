@@ -32,6 +32,7 @@ class WeatherSummary(BaseModel):
     location_label: Optional[str] = None
     today_max_temp_c: Optional[float] = None
     today_min_temp_c: Optional[float] = None
+    current_temp_c: Optional[float] = None
     precipitation_sum_mm: Optional[float] = None
     precipitation_probability_pct: Optional[float] = None
     max_wind_speed_kmh: Optional[float] = None

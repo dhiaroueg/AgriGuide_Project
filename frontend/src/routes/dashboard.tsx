@@ -3,17 +3,19 @@ import { AppShell } from "@/components/AppShell";
 import { AlertBanner } from "@/components/AlertBanner";
 import { Reveal } from "@/components/motion/Reveal";
 import { WeatherPanel } from "@/components/WeatherPanel";
+import { AgentConstellationHub } from "@/components/AgentConstellationHub";
+import { PageTour } from "@/components/onboarding/PageTour";
 import { listings } from "@/features/marketplace/data";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
 import {
   Sprout,
   ScrollText,
   LineChart,
   Store,
   ArrowRight,
-  CalendarDays,
-  ChevronRight,
+  MapPinned,
+  BrainCircuit,
+  ShieldCheck,
 } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard")({
@@ -31,36 +33,54 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
-const ACTIONS = [
+const ADVISOR_FLOW = [
+  {
+    to: "/regulation" as const,
+    step: "01",
+    label: "Sécuriser le projet",
+    advisor: "Conseiller Réglementaire",
+    body: "Vérifiez les aides, obligations et certifications avant de décider.",
+    icon: ScrollText,
+  },
   {
     to: "/agriculture" as const,
-    label: "Conseiller Agricole",
-    hint: "Analyser une parcelle",
+    step: "02",
+    label: "Lire la parcelle",
+    advisor: "Conseiller Agricole",
+    body: "Analysez le sol, le climat et les cultures adaptées à votre terrain.",
     icon: Sprout,
   },
   {
     to: "/business" as const,
-    label: "Conseiller Financier",
-    hint: "Comparer 3 scénarios",
+    step: "03",
+    label: "Chiffrer les options",
+    advisor: "Conseiller Financier",
+    body: "Comparez les scénarios qui découlent de vos choix de culture.",
     icon: LineChart,
-  },
-  {
-    to: "/regulation" as const,
-    label: "Conseiller Réglementaire",
-    hint: "Aides & cadre légal",
-    icon: ScrollText,
-  },
-  {
-    to: "/aujourd-hui" as const,
-    label: "Aujourd'hui",
-    hint: "Briefing terrain",
-    icon: CalendarDays,
   },
 ] as const;
 
 const myListings = listings.filter((l) => l.mine);
 const myRecoltes = myListings.filter((l) => l.kind === "recolte").length;
 const myDechets = myListings.filter((l) => l.kind === "dechet").length;
+
+const ABOUT_PILLARS = [
+  {
+    title: "Partir du terrain",
+    body: "Météo, parcelle et contexte cultural pour ancrer chaque recommandation dans votre exploitation.",
+    icon: MapPinned,
+  },
+  {
+    title: "Éclairer la décision",
+    body: "Des conseillers agricoles, financiers et réglementaires qui mettent les options à plat.",
+    icon: BrainCircuit,
+  },
+  {
+    title: "Garder le cap",
+    body: "Des signaux utiles, des sources identifiables et des priorités concrètes au fil de la saison.",
+    icon: ShieldCheck,
+  },
+] as const;
 
 function Dashboard() {
   const { user } = useAuth();
@@ -82,11 +102,17 @@ function Dashboard() {
         <Link
           to="/aujourd-hui"
           className="nudge-x inline-flex items-center gap-2 self-start rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 md:self-auto"
+          data-tour="dash-briefing"
         >
           Briefing du jour
           <ArrowRight className="nudge-target h-4 w-4" />
         </Link>
       </div>
+
+      {/* Agent Constellation Orchestration Hub */}
+      <Reveal delay={40} className="mb-8">
+        <AgentConstellationHub />
+      </Reveal>
 
       <Reveal delay={60}>
         <AlertBanner tone="warning" title="Risque de gel cette nuit (Ferme des Prés)">
@@ -97,7 +123,9 @@ function Dashboard() {
       {/* Weather + marketplace */}
       <div className="mt-6 grid gap-4 md:grid-cols-3 md:items-stretch">
         <Reveal from="left" className="md:col-span-2 flex">
-          <WeatherPanel className="w-full" />
+          <div data-tour="dash-weather" className="w-full">
+            <WeatherPanel className="w-full" />
+          </div>
         </Reveal>
 
         <Reveal from="right" delay={100} className="flex">
@@ -160,54 +188,100 @@ function Dashboard() {
         </Reveal>
       </div>
 
-      {/* Quick actions — operational, not journey pitch cards */}
-      <div className="mt-10">
-        <Reveal className="flex items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-              Accès rapide
-            </p>
-            <h2 className="mt-1 font-display text-2xl md:text-3xl font-bold tracking-tight">
-              Où aller ensuite&nbsp;?
-            </h2>
-          </div>
+      <section className="mt-11 border-y border-border/70 py-8 md:py-10" aria-labelledby="advisor-flow-title">
+        <Reveal className="max-w-2xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            Vos conseillers travaillent ensemble
+          </p>
+          <h2 id="advisor-flow-title" className="mt-2 font-display text-2xl font-bold tracking-tight md:text-3xl">
+            Une décision, trois regards.
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Chaque étape utilise la même connaissance de votre exploitation pour transformer une
+            observation terrain en choix réaliste et conforme.
+          </p>
         </Reveal>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {ACTIONS.map((action, i) => {
-            const Icon = action.icon;
+        <div className="relative mt-7">
+          <div className="pointer-events-none absolute left-[1.45rem] right-[1.45rem] top-[1.45rem] hidden h-px bg-border md:block" aria-hidden />
+          <ol className="grid gap-7 md:grid-cols-3 md:gap-0" data-tour="dash-actions">
+          {ADVISOR_FLOW.map((advisor, i) => {
+            const Icon = advisor.icon;
             return (
-              <Reveal key={action.to} from="up" delay={i * 70}>
-                <Link
-                  to={action.to}
-                  className={cn(
-                    "group surface-glass flex items-center gap-3 rounded-2xl p-4",
-                    "transition-all duration-300 hover:-translate-y-0.5 hover:border-signal/50",
-                  )}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-signal transition-transform duration-300 group-hover:scale-105">
+              <Reveal key={advisor.to} as="li" from="up" delay={i * 90} className="relative md:px-6 first:md:pl-0 last:md:pr-0">
+                <Link to={advisor.to} className="group block outline-none">
+                  <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-card text-primary transition-transform duration-300 group-hover:-translate-y-1 group-hover:border-signal">
                     <Icon className="h-5 w-5" />
+                  </div>
+                  <p className="mt-5 font-mono text-[11px] font-medium tracking-[0.16em] text-primary">
+                    {advisor.step} · {advisor.advisor}
+                  </p>
+                  <h3 className="mt-1 font-display text-xl font-bold tracking-tight">{advisor.label}</h3>
+                  <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">{advisor.body}</p>
+                  <span className="nudge-x mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+                    Ouvrir le conseiller <ArrowRight className="nudge-target h-4 w-4" />
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-display text-base font-bold tracking-tight">
-                      {action.label}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">{action.hint}</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </Link>
               </Reveal>
             );
           })}
+          </ol>
         </div>
-      </div>
+      </section>
+
+      <Reveal from="up" className="mt-12">
+        <section className="border-y border-border/70 py-8 md:py-10" aria-labelledby="about-agriment">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] lg:items-center lg:gap-12">
+            <div className="relative min-h-64 overflow-hidden rounded-xl sm:min-h-72">
+              <img
+                src="/img/landing-hero-field.jpg"
+                alt="Vue d'un champ cultivé"
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-primary/30" aria-hidden />
+              <div className="absolute bottom-0 left-0 right-0 p-5 text-primary-foreground">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-signal">
+                  AgriMent
+                </p>
+                <p className="mt-1 max-w-sm font-display text-xl font-bold leading-tight">
+                  Des décisions plus sereines, de la parcelle au bilan.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                À propos
+              </p>
+              <h2 id="about-agriment" className="mt-2 font-display text-2xl font-bold tracking-tight md:text-3xl">
+                Un copilote pour les décisions qui comptent.
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+                AgriMent rassemble les informations utiles à votre exploitation et les transforme en
+                repères actionnables. Vous gardez la main sur vos choix, avec une vision plus claire
+                des risques, des opportunités et des prochaines étapes.
+              </p>
+
+              <div className="mt-6 grid gap-5 sm:grid-cols-3">
+                {ABOUT_PILLARS.map((pillar) => {
+                  const Icon = pillar.icon;
+                  return (
+                    <div key={pillar.title} className="border-l-2 border-signal/70 pl-3.5">
+                      <Icon className="h-4 w-4 text-primary" />
+                      <h3 className="mt-2 font-display text-base font-bold tracking-tight">{pillar.title}</h3>
+                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{pillar.body}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+      </Reveal>
 
       <Reveal from="blur" className="mt-10">
         <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-primary px-6 py-7 md:px-8 md:py-8 text-primary-foreground">
-          <div
-            className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-signal/25 blur-3xl"
-            aria-hidden
-          />
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
               <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-signal">
@@ -232,6 +306,7 @@ function Dashboard() {
           </div>
         </div>
       </Reveal>
+      <PageTour tourId="dashboard" />
     </AppShell>
   );
 }

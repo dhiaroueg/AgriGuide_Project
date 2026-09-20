@@ -7,24 +7,45 @@ vectoriser les requêtes, afin qu'elles soient comparables aux documents.
 """
 
 from functools import lru_cache
-
-from fastembed import SparseTextEmbedding
+import logging
+from typing import Optional
 from qdrant_client import models
 
+logger = logging.getLogger(__name__)
 BM25_SPARSE_MODEL = "Qdrant/bm25"
+
+try:
+    from fastembed import SparseTextEmbedding
+    FASTEMBED_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"fastembed / mmh3 indisponible ({e}). Bascule en recherche dense pure.")
+    FASTEMBED_AVAILABLE = False
+    SparseTextEmbedding = None
 
 
 @lru_cache
-def get_bm25_model() -> SparseTextEmbedding:
-    """Retourne le modèle d'embedding épars BM25 (mis en cache)."""
-    return SparseTextEmbedding(model_name=BM25_SPARSE_MODEL)
+def get_bm25_model():
+    """Retourne le modèle d'embedding épars BM25 (mis en cache) ou None."""
+    if not FASTEMBED_AVAILABLE or SparseTextEmbedding is None:
+        return None
+    try:
+        return SparseTextEmbedding(model_name=BM25_SPARSE_MODEL)
+    except Exception as e:
+        logger.warning(f"Erreur d'initialisation du modèle BM25 ({e}).")
+        return None
 
 
-def embed_query_sparse(text: str) -> models.SparseVector:
-    """Vectorise une requête utilisateur en un vecteur épars de type BM25."""
+def embed_query_sparse(text: str) -> Optional[models.SparseVector]:
+    """Vectorise une requête utilisateur en un vecteur épars de type BM25 si disponible."""
     model = get_bm25_model()
-    embedding = next(model.query_embed(text))
-    return models.SparseVector(
-        indices=embedding.indices.tolist(),
-        values=embedding.values.tolist(),
-    )
+    if model is None:
+        return None
+    try:
+        embedding = next(model.query_embed(text))
+        return models.SparseVector(
+            indices=embedding.indices.tolist(),
+            values=embedding.values.tolist(),
+        )
+    except Exception as e:
+        logger.warning(f"Erreur lors de l'embedding BM25 ({e}).")
+        return None

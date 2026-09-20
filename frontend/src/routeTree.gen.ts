@@ -15,10 +15,14 @@ import { Route as AujourdHuiRouteImport } from './routes/aujourd-hui'
 import { Route as BusinessRouteImport } from './routes/business'
 import { Route as ConnexionRouteImport } from './routes/connexion'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DiagnosticRouteImport } from './routes/diagnostic'
 import { Route as InscriptionRouteImport } from './routes/inscription'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
+import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as RegulationRouteImport } from './routes/regulation'
+import { Route as TradingRouteImport } from './routes/trading'
+import { Route as WeatherRouteImport } from './routes/weather'
 import { Route as MarketplaceIndexRouteImport } from './routes/marketplace.index'
 import { Route as MarketplaceIdRouteImport } from './routes/marketplace.$id'
 import { Route as MarketplaceMesAnnoncesRouteImport } from './routes/marketplace.mes-annonces'
@@ -55,6 +59,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DiagnosticRoute = DiagnosticRouteImport.update({
+  id: '/diagnostic',
+  path: '/diagnostic',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InscriptionRoute = InscriptionRouteImport.update({
   id: '/inscription',
   path: '/inscription',
@@ -65,6 +74,11 @@ const MarketplaceRoute = MarketplaceRouteImport.update({
   path: '/marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrganizationsRoute = OrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfilRoute = ProfilRouteImport.update({
   id: '/profil',
   path: '/profil',
@@ -73,6 +87,16 @@ const ProfilRoute = ProfilRouteImport.update({
 const RegulationRoute = RegulationRouteImport.update({
   id: '/regulation',
   path: '/regulation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TradingRoute = TradingRouteImport.update({
+  id: '/trading',
+  path: '/trading',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WeatherRoute = WeatherRouteImport.update({
+  id: '/weather',
+  path: '/weather',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketplaceIndexRoute = MarketplaceIndexRouteImport.update({
@@ -108,10 +132,14 @@ export interface FileRoutesByFullPath {
   '/business': typeof BusinessRoute
   '/connexion': typeof ConnexionRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/inscription': typeof InscriptionRoute
   '/marketplace': typeof MarketplaceRouteWithChildren
+  '/organizations': typeof OrganizationsRoute
   '/profil': typeof ProfilRoute
   '/regulation': typeof RegulationRoute
+  '/trading': typeof TradingRoute
+  '/weather': typeof WeatherRoute
   '/marketplace/$id': typeof MarketplaceIdRoute
   '/marketplace/mes-annonces': typeof MarketplaceMesAnnoncesRoute
   '/marketplace/nouveau': typeof MarketplaceNouveauRoute
@@ -125,9 +153,13 @@ export interface FileRoutesByTo {
   '/business': typeof BusinessRoute
   '/connexion': typeof ConnexionRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/inscription': typeof InscriptionRoute
+  '/organizations': typeof OrganizationsRoute
   '/profil': typeof ProfilRoute
   '/regulation': typeof RegulationRoute
+  '/trading': typeof TradingRoute
+  '/weather': typeof WeatherRoute
   '/marketplace/$id': typeof MarketplaceIdRoute
   '/marketplace/mes-annonces': typeof MarketplaceMesAnnoncesRoute
   '/marketplace/nouveau': typeof MarketplaceNouveauRoute
@@ -142,10 +174,14 @@ export interface FileRoutesById {
   '/business': typeof BusinessRoute
   '/connexion': typeof ConnexionRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/inscription': typeof InscriptionRoute
   '/marketplace': typeof MarketplaceRouteWithChildren
+  '/organizations': typeof OrganizationsRoute
   '/profil': typeof ProfilRoute
   '/regulation': typeof RegulationRoute
+  '/trading': typeof TradingRoute
+  '/weather': typeof WeatherRoute
   '/marketplace/$id': typeof MarketplaceIdRoute
   '/marketplace/mes-annonces': typeof MarketplaceMesAnnoncesRoute
   '/marketplace/nouveau': typeof MarketplaceNouveauRoute
@@ -161,10 +197,14 @@ export interface FileRouteTypes {
     | '/business'
     | '/connexion'
     | '/dashboard'
+    | '/diagnostic'
     | '/inscription'
     | '/marketplace'
+    | '/organizations'
     | '/profil'
     | '/regulation'
+    | '/trading'
+    | '/weather'
     | '/marketplace/$id'
     | '/marketplace/mes-annonces'
     | '/marketplace/nouveau'
@@ -178,9 +218,13 @@ export interface FileRouteTypes {
     | '/business'
     | '/connexion'
     | '/dashboard'
+    | '/diagnostic'
     | '/inscription'
+    | '/organizations'
     | '/profil'
     | '/regulation'
+    | '/trading'
+    | '/weather'
     | '/marketplace/$id'
     | '/marketplace/mes-annonces'
     | '/marketplace/nouveau'
@@ -194,10 +238,14 @@ export interface FileRouteTypes {
     | '/business'
     | '/connexion'
     | '/dashboard'
+    | '/diagnostic'
     | '/inscription'
     | '/marketplace'
+    | '/organizations'
     | '/profil'
     | '/regulation'
+    | '/trading'
+    | '/weather'
     | '/marketplace/$id'
     | '/marketplace/mes-annonces'
     | '/marketplace/nouveau'
@@ -212,10 +260,14 @@ export interface RootRouteChildren {
   BusinessRoute: typeof BusinessRoute
   ConnexionRoute: typeof ConnexionRoute
   DashboardRoute: typeof DashboardRoute
+  DiagnosticRoute: typeof DiagnosticRoute
   InscriptionRoute: typeof InscriptionRoute
   MarketplaceRoute: typeof MarketplaceRouteWithChildren
+  OrganizationsRoute: typeof OrganizationsRoute
   ProfilRoute: typeof ProfilRoute
   RegulationRoute: typeof RegulationRoute
+  TradingRoute: typeof TradingRoute
+  WeatherRoute: typeof WeatherRoute
   OnboardingTerrainRoute: typeof OnboardingTerrainRoute
 }
 
@@ -263,6 +315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/diagnostic': {
+      id: '/diagnostic'
+      path: '/diagnostic'
+      fullPath: '/diagnostic'
+      preLoaderRoute: typeof DiagnosticRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/inscription': {
       id: '/inscription'
       path: '/inscription'
@@ -277,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organizations': {
+      id: '/organizations'
+      path: '/organizations'
+      fullPath: '/organizations'
+      preLoaderRoute: typeof OrganizationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profil': {
       id: '/profil'
       path: '/profil'
@@ -289,6 +355,20 @@ declare module '@tanstack/react-router' {
       path: '/regulation'
       fullPath: '/regulation'
       preLoaderRoute: typeof RegulationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trading': {
+      id: '/trading'
+      path: '/trading'
+      fullPath: '/trading'
+      preLoaderRoute: typeof TradingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/weather': {
+      id: '/weather'
+      path: '/weather'
+      fullPath: '/weather'
+      preLoaderRoute: typeof WeatherRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketplace/': {
@@ -354,10 +434,14 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessRoute: BusinessRoute,
   ConnexionRoute: ConnexionRoute,
   DashboardRoute: DashboardRoute,
+  DiagnosticRoute: DiagnosticRoute,
   InscriptionRoute: InscriptionRoute,
   MarketplaceRoute: MarketplaceRouteWithChildren,
+  OrganizationsRoute: OrganizationsRoute,
   ProfilRoute: ProfilRoute,
   RegulationRoute: RegulationRoute,
+  TradingRoute: TradingRoute,
+  WeatherRoute: WeatherRoute,
   OnboardingTerrainRoute: OnboardingTerrainRoute,
 }
 export const routeTree = rootRouteImport

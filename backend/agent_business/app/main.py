@@ -4,12 +4,24 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers.business import router as business_router
-
 # Repo-root .env (MISTRAL_API_KEY, MARKET_DATA_DIR, …)
-_REPO_ENV = Path(__file__).resolve().parents[3] / ".env"
-load_dotenv(_REPO_ENV)
+def _repo_env_path() -> Path | None:
+    """Locate the repository .env locally without breaking the Docker image."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / ".env"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+_REPO_ENV = _repo_env_path()
+if _REPO_ENV is not None:
+    load_dotenv(_REPO_ENV)
 load_dotenv()  # also allow backend/agent_business/.env overrides
+
+# Import after configuration loading: business modules read environment values
+# during initialization.
+from app.routers.business import router as business_router
 
 app = FastAPI(title="AgriAdvisor — Agent Business", version="0.2.0")
 

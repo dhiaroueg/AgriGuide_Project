@@ -38,16 +38,25 @@ def hybrid_search(query: str, top_k: int = 5) -> list[RetrievedChunk]:
     dense_vector = embed_query(query)
     sparse_vector = embed_query_sparse(query)
 
-    results = client.query_points(
-        collection_name=get_collection_name(),
-        prefetch=[
-            models.Prefetch(query=dense_vector, using=DENSE_VECTOR_NAME, limit=DEFAULT_PREFETCH_LIMIT),
-            models.Prefetch(query=sparse_vector, using=SPARSE_VECTOR_NAME, limit=DEFAULT_PREFETCH_LIMIT),
-        ],
-        query=models.FusionQuery(fusion=models.Fusion.RRF),
-        limit=top_k,
-        with_payload=True,
-    ).points
+    if sparse_vector is not None:
+        results = client.query_points(
+            collection_name=get_collection_name(),
+            prefetch=[
+                models.Prefetch(query=dense_vector, using=DENSE_VECTOR_NAME, limit=DEFAULT_PREFETCH_LIMIT),
+                models.Prefetch(query=sparse_vector, using=SPARSE_VECTOR_NAME, limit=DEFAULT_PREFETCH_LIMIT),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=top_k,
+            with_payload=True,
+        ).points
+    else:
+        results = client.query_points(
+            collection_name=get_collection_name(),
+            query=dense_vector,
+            using=DENSE_VECTOR_NAME,
+            limit=top_k,
+            with_payload=True,
+        ).points
 
     chunks = [
         RetrievedChunk(

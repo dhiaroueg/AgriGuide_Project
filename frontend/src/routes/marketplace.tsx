@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tan
 import { useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTour } from "@/components/onboarding/PageTour";
 import { Plus, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -60,6 +61,7 @@ function Layout() {
           !isAcheteur ? (
             <Link
               to="/marketplace/nouveau"
+              data-tour="market-new"
               className="group press nudge-x inline-flex items-center gap-2 rounded-2xl bg-primary text-primary-foreground px-5 h-12 font-medium shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-lift"
             >
               <Plus className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" />
@@ -70,7 +72,7 @@ function Layout() {
       />
 
       {showTabs && !isAcheteur && (
-        <div className="flex gap-2 mb-6 border-b border-border">
+        <div className="flex gap-2 mb-6 border-b border-border" data-tour="market-tabs">
           {tabs.map((t) => {
             const active = t.exact ? pathname === t.to : pathname.startsWith(t.to);
             return (
@@ -98,6 +100,7 @@ function Layout() {
       )}
 
       {isAcheteur && restrictedForAcheteur ? null : <Outlet />}
+      <PageTour tourId="marketplace" />
     </AppShell>
   );
 }

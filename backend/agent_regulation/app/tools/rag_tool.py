@@ -34,7 +34,10 @@ def recherche_reglementation_agricole(question: str) -> str:
     sémantique et recherche par mots-clés sur la base réglementaire.
     """
     start = time.perf_counter()
-    chunks = hybrid_search(question, top_k=5)
-    result = _format_chunks(chunks)
+    try:
+        chunks = hybrid_search(question, top_k=5)
+        result = _format_chunks(chunks)
+    except Exception as exc:
+        result = f"Base réglementaire temporairement indisponible ({exc}). Réponds à partir de tes connaissances générales en droit agricole français, en signalant clairement que tu n'as pas pu consulter la base réglementaire locale."
     print(f"[PERF] RAG: {time.perf_counter() - start:.2f}s")
     return result

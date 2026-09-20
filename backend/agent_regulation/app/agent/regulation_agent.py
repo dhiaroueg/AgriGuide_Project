@@ -16,10 +16,11 @@ Flux général :
 
 import time
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_mistralai import ChatMistralAI
 
 from app.config.settings import get_settings
+from app.schemas.chat import ChatHistoryMessage
 from app.tools.rag_tool import recherche_reglementation_agricole
 from app.tools.subsidy_tool import recherche_aides_financieres_agricoles
 from app.tools.web_search_tool import recherche_web_aides_agricoles
@@ -98,23 +99,57 @@ class RegulationAgent:
     def __init__(self) -> None:
         settings = get_settings()
         api_key = settings.mistral_api_key
+        model_name = settings.mistral_model
         self._tool_selection_llm = ChatMistralAI(
-            model="mistral-small-latest",
+            model=model_name,
             api_key=api_key,
             temperature=0,
         )
         self._final_answer_llm = ChatMistralAI(
-            model="mistral-large-latest",
+            model=model_name,
             api_key=api_key,
             temperature=0,
         )
         self._llm_with_tools = self._tool_selection_llm.bind_tools(TOOLS)
         self._tools_by_name = {t.name: t for t in TOOLS}
 
-    def answer(self, question: str) -> str:
-        """Répond à une question utilisateur en s'appuyant sur le RAG réglementaire."""
+    def answer(
+        self,
+        question: str,
+        history: list[ChatHistoryMessage] | None = None,
+        memories: list[str] | None = None,
+    ) -> str:
+        """Répond à une question utilisateur en s'appuyant sur le RAG réglementaire.
+
+        Args:
+            question: La question courante de l'utilisateur.
+            history: Historique des échanges précédents (multi-tour).
+            memories: Mémoires persistantes de l'utilisateur injectées dans le contexte.
+        """
         total_start = time.perf_counter()
-        messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=question)]
+
+        # Construction du système prompt avec mémoires injectées
+        system_content = SYSTEM_PROMPT
+        if memories:
+            memories_block = "\n".join(f"- {m}" for m in memories)
+            system_content = (
+                f"{SYSTEM_PROMPT}\n\n"
+                f"MÉMOIRES PERSISTANTES DE L'UTILISATEUR (utilise-les comme contexte "
+                f"supplémentaire pour personnaliser ta réponse) :\n{memories_block}"
+            )
+
+        messages: list = [SystemMessage(content=system_content)]
+
+        # Injection de l'historique multi-tour
+        if history:
+            for msg in history[:-1]:  # Exclure le message courant (déjà dans `question`)
+                if msg.role == "user":
+                    messages.append(HumanMessage(content=msg.text))
+                else:
+                    messages.append(AIMessage(content=msg.text))
+
+        # Message courant
+        messages.append(HumanMessage(content=question))
 
         step_start = time.perf_counter()
         ai_message = self._llm_with_tools.invoke(messages)
